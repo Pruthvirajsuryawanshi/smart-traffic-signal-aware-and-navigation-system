@@ -1,0 +1,281 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 20% 14%;
+
+    --card: 220 14% 96%;
+    --card-foreground: 220 20% 14%;
+
+    --popover: 220 14% 96%;
+    --popover-foreground: 220 20% 14%;
+
+    --primary: 142 70% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 90%;
+    --secondary-foreground: 220 20% 30%;
+
+    --muted: 220 14% 92%;
+    --muted-foreground: 215 15% 45%;
+
+    --accent: 45 90% 50%;
+    --accent-foreground: 220 20% 10%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 14% 85%;
+    --input: 220 14% 85%;
+    --ring: 142 70% 38%;
+
+    --radius: 0.5rem;
+
+    --signal-red: 0 72% 50%;
+    --signal-green: 142 70% 45%;
+    --signal-yellow: 45 90% 50%;
+
+    --sidebar-background: 220 14% 97%;
+    --sidebar-foreground: 220 20% 30%;
+    --sidebar-primary: 142 70% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 92%;
+    --sidebar-accent-foreground: 220 20% 30%;
+    --sidebar-border: 220 14% 85%;
+    --sidebar-ring: 142 70% 38%;
+
+    font-family: 'Inter', sans-serif;
+  }
+
+  .dark {
+    --background: 220 20% 10%;
+    --foreground: 210 20% 92%;
+
+    --card: 220 18% 14%;
+    --card-foreground: 210 20% 92%;
+
+    --popover: 220 18% 14%;
+    --popover-foreground: 210 20% 92%;
+
+    --primary: 142 70% 45%;
+    --primary-foreground: 220 20% 10%;
+
+    --secondary: 220 15% 20%;
+    --secondary-foreground: 210 20% 85%;
+
+    --muted: 220 15% 18%;
+    --muted-foreground: 215 15% 55%;
+
+    --accent: 45 90% 55%;
+    --accent-foreground: 220 20% 10%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 15% 22%;
+    --input: 220 15% 22%;
+    --ring: 142 70% 45%;
+
+    --signal-red: 0 72% 50%;
+    --signal-green: 142 70% 45%;
+    --signal-yellow: 45 90% 55%;
+
+    --sidebar-background: 220 18% 12%;
+    --sidebar-foreground: 210 20% 85%;
+    --sidebar-primary: 142 70% 45%;
+    --sidebar-primary-foreground: 220 20% 10%;
+    --sidebar-accent: 220 15% 18%;
+    --sidebar-accent-foreground: 210 20% 85%;
+    --sidebar-border: 220 15% 22%;
+    --sidebar-ring: 142 70% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'JetBrains Mono', monospace;
+  }
+  code, .mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Leaflet overrides */
+.leaflet-container {
+  background: hsl(var(--background));
+}
+.leaflet-control-zoom a {
+  background: hsl(220 18% 14%) !important;
+  color: hsl(210 20% 92%) !important;
+  border-color: hsl(220 15% 22%) !important;
+}
+.leaflet-control-zoom a:hover {
+  background: hsl(220 15% 20%) !important;
+}
+
+/* Leaflet Routing Machine dark theme */
+.leaflet-routing-container {
+  background: hsl(220 18% 14% / 0.95) !important;
+  color: hsl(210 20% 92%) !important;
+  border: 1px solid hsl(220 15% 22%) !important;
+  border-radius: 8px !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 11px !important;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+  margin-top: 44px !important;
+  backdrop-filter: blur(8px);
+  transition: all 0.25s ease;
+  max-width: 280px;
+}
+.leaflet-routing-container.leaflet-routing-container-hide {
+  max-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  border: none !important;
+  opacity: 0;
+  pointer-events: none;
+}
+/* Minimized dot indicator */
+.leaflet-routing-minimized-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: hsl(142 70% 45%);
+  border: 2px solid hsl(220 15% 22%);
+  cursor: pointer;
+  z-index: 1000;
+  position: absolute;
+  top: 50px;
+  right: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4), 0 0 8px hsl(142 70% 45% / 0.3);
+  transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.leaflet-routing-minimized-dot::after {
+  content: '▶';
+  font-size: 10px;
+  color: hsl(220 20% 10%);
+}
+.leaflet-routing-minimized-dot:hover {
+  transform: scale(1.15);
+}
+.leaflet-routing-container h2 {
+  color: hsl(142 70% 45%) !important;
+  font-size: 12px !important;
+  margin: 4px 0 !important;
+}
+.leaflet-routing-container h3 {
+  color: hsl(210 20% 85%) !important;
+  font-size: 11px !important;
+}
+.leaflet-routing-alt {
+  padding: 6px 8px !important;
+}
+.leaflet-routing-alt:hover {
+  background: transparent !important;
+}
+.leaflet-routing-alt table .leaflet-routing-instruction:hover {
+  background: transparent !important;
+  text-decoration: none !important;
+}
+.leaflet-routing-alt tr:hover {
+  background: transparent !important;
+}
+.leaflet-routing-alt table td {
+  color: hsl(210 20% 85%) !important;
+  font-size: 10px !important;
+  padding: 2px 4px !important;
+}
+.leaflet-routing-alt table .leaflet-routing-instruction {
+  color: hsl(210 20% 92%) !important;
+}
+/* Minimize/collapse button for routing */
+.leaflet-routing-collapse-btn {
+  display: none;
+}
+.leaflet-routing-container .leaflet-routing-collapse-btn {
+  display: block;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: hsl(220 15% 20%);
+  color: hsl(210 20% 85%);
+  border: 1px solid hsl(220 15% 28%);
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+  cursor: pointer;
+  z-index: 10;
+}
+.leaflet-routing-container .leaflet-routing-collapse-btn:hover {
+  background: hsl(220 15% 28%);
+}
+
+/* Tooltip styles */
+.marker-label {
+  background: hsl(220 18% 14%) !important;
+  border: 1px solid hsl(220 15% 22%) !important;
+  color: hsl(210 20% 92%) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Popup dark theme */
+.leaflet-popup-content-wrapper {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 8px !important;
+  padding: 0 !important;
+}
+.leaflet-popup-content {
+  margin: 0 !important;
+}
+.leaflet-popup-tip {
+  background: hsl(220 18% 14%) !important;
+}
+
+/* Signal pulse animation */
+@keyframes pulse-signal {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Thin scrollbar for sidebar */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 4px;
+}
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 2px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+.overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
