@@ -10,15 +10,7 @@ import SettingsPanel from '@/components/SettingsPanel';
 import type { SignalConfig } from '@/components/SettingsPanel';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { SIGNAL_METADATA } from '@/types/signal';
-import type { RouteSignalInfo, TrafficSignal } from '@/types/signal';
-
-type SignalConfig = {
-  id: string;
-  intersection: string;
-  latitude: number;
-  longitude: number;
-  ip: string;
-};
+import type { RouteSignalInfo } from '@/types/signal';
 
 const Index = () => {
   const { signals, loading, updateSignal, getRuntime, runtimes } = useSignals();
