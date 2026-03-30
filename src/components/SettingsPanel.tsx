@@ -96,7 +96,7 @@ export default function SettingsPanel({ signalConfigs, onSignalConfigsChange, op
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-2xl w-[90vw] max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="font-mono">⚙️ Admin Settings</DialogTitle>
           <DialogDescription>Manage intersections, signals, and ESP32 configuration.</DialogDescription>
