@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSignals } from '@/hooks/useSignals';
 import { useAmbulanceSimulation } from '@/hooks/useAmbulanceSimulation';
 import TrafficMap from '@/components/TrafficMap';
@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { SignalConfig } from '@/components/SettingsPanel';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { SIGNAL_METADATA } from '@/types/signal';
-import type { RouteSignalInfo } from '@/types/signal';
+import type { RouteSignalInfo, TrafficSignal } from '@/types/signal';
 
 const Index = () => {
   const { signals, loading, updateSignal, refreshSignals, getRuntime, runtimes } = useSignals();
@@ -38,6 +38,23 @@ const Index = () => {
   });
 
   const ambulance = useAmbulanceSimulation(signals, routeSignals);
+
+  const mapSignals = useMemo(() => {
+    const existingIds = new Set(signals.map((signal) => signal.id));
+    const fallbackSignals: TrafficSignal[] = signalConfigs
+      .filter((config) => !existingIds.has(config.id))
+      .map((config) => ({
+        id: config.id,
+        latitude: config.latitude,
+        longitude: config.longitude,
+        intersection: config.intersection,
+        roadName: config.roadName,
+        type: config.type,
+        state: 'RED',
+        updated_at: new Date().toISOString(),
+      }));
+    return [...signals, ...fallbackSignals];
+  }, [signals, signalConfigs]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
@@ -140,6 +157,24 @@ const Index = () => {
 
   const saveSignalConfigs = useCallback(async (configs: SignalConfig[]) => {
     setSavingSignalConfigs(true);
+
+    const existingIds = new Set(signals.map((signal) => signal.id));
+    const idsToDelete = Array.from(existingIds).filter(
+      (id) => !configs.some((config) => config.id === id),
+    );
+
+    if (idsToDelete.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('traffic_signals')
+        .delete()
+        .in('id', idsToDelete);
+
+      if (deleteError) {
+        setSavingSignalConfigs(false);
+        return false;
+      }
+    }
+
     const payload = configs.map((config) => ({
       id: config.id,
       latitude: config.latitude,
@@ -163,7 +198,7 @@ const Index = () => {
     setSignalConfigs(configs);
     await refreshSignals();
     return true;
-  }, [refreshSignals]);
+  }, [refreshSignals, signals]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -294,7 +329,7 @@ const Index = () => {
       {/* Map */}
       <div className="flex-1 relative">
         <TrafficMap
-          signals={signals}
+          signals={mapSignals}
           onRouteSignals={handleRouteSignals}
           onRouteDistance={handleRouteDistance}
           getRuntime={getRuntime}

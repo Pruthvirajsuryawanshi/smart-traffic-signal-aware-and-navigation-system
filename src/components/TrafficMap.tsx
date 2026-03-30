@@ -73,6 +73,7 @@ export default function TrafficMap({
   const ambulancePolylineRef = useRef<L.Polyline | null>(null);
   const [mapLayer, setMapLayer] = useState<'street' | 'satellite'>('street');
   const [settingPoint, setSettingPoint] = useState<'start' | 'end' | 'signal' | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const startMarkerRef = useRef<L.Marker | null>(null);
   const endMarkerRef = useRef<L.Marker | null>(null);
   const signalPickMarkerRef = useRef<L.Marker | null>(null);
@@ -203,6 +204,7 @@ export default function TrafficMap({
 
     routingControlRef.current = routingControl;
     mapRef.current = map;
+    setMapReady(true);
 
     // Geolocation
     if (navigator.geolocation) {
@@ -321,7 +323,7 @@ export default function TrafficMap({
   // Update signal markers
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || signals.length === 0) return;
+    if (!map || !mapReady || signals.length === 0) return;
 
     const routeSignalIds = new Set<string>();
     const routeCoords: { lat: number; lng: number }[] | null = ambulanceRoute && ambulanceRoute.length > 1

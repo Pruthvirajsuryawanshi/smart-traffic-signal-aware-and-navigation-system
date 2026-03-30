@@ -1,73 +1,85 @@
-# Welcome to your Lovable project
+# Traffic Signal Nav
 
-## Project info
+A smart traffic signal monitoring and ambulance navigation system built with React, TypeScript, Vite, Tailwind CSS, and Supabase.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Project overview
 
-## How can I edit this code?
+This application simulates and manages traffic signals for a mapped route network. It is designed to:
 
-There are several ways of editing your application.
+- monitor traffic signals in real time
+- compute route signal behavior for ambulance paths
+- import ambulance GPS routes from CSV
+- trigger emergency green-light overrides with ESP32 integration
+- manage signal configurations and intersection IPs via admin controls
 
-**Use Lovable**
+## Key features
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- **Live signal sync** from Supabase with computed cycle state
+- **Ambulance route planning** using route signal detection
+- **Signal override simulation** for approaching ambulances
+- **Admin dashboard** for updating signal state and runtime
+- **Settings panel** for signal metadata and device IP management
 
-Changes made via Lovable will be committed automatically to this repo.
+## Technology stack
 
-**Use your preferred IDE**
+- React + TypeScript
+- Vite
+- Tailwind CSS
+- shadcn-ui / Radix UI
+- Supabase
+- React Router
+- TanStack Query
+- Leaflet / React-Leaflet
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Run locally
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Open `http://localhost:5173` in your browser.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Preview
 
-**Use GitHub Codespaces**
+Open the project preview at:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+https://traffic-pulse-mapper.lovable.app
 
-## What technologies are used for this project?
+## Build and preview
 
-This project is built with:
+```sh
+npm run build
+npm run preview
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Tests
 
-## How can I deploy this project?
+```sh
+npm test
+npm run test:watch
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+## Repo structure
 
-## Can I connect a custom domain to my Lovable project?
+- `src/pages/Index.tsx` — main dashboard with route, signal, and ambulance tabs
+- `src/hooks/useSignals.ts` — Supabase polling and runtime signal calculation
+- `src/hooks/useAmbulanceSimulation.ts` — ambulance route simulation and override logic
+- `src/components/` — UI panels, map integration, and dialogs
+- `src/integrations/supabase/` — Supabase client and functions
+- `src/lib/` — route and signal helper utilities
+- `src/types/` — shared signal and route types
 
-Yes, you can!
+## Data and integration
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Traffic signal state is synchronized from Supabase tables such as `traffic_signals` and `intersection_ips`. The UI refreshes signal data frequently and calculates intersection timing so the map and dashboard stay current.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### ESP32 integration
+
+The app includes optional local network support to send `emergency` and `normal` commands to ESP32 devices at configured intersection IPs. This requires the app and ESP32 devices to be on the same network.
+
+## Notes
+
+- The current UI title is **Traffic Signal Nav**.
+- The app uses Supabase for signal persistence and runtime updates.
+- Future improvements can include route editing, better signal matching, and stronger hardware integration.
