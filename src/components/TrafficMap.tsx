@@ -23,6 +23,8 @@ interface TrafficMapProps {
   speed: number;
   ambulancePosition?: AmbulancePoint | null;
   ambulanceRoute?: AmbulancePoint[];
+  signalLocationPickMode?: boolean;
+  onSignalLocationPick?: (lat: number, lng: number) => void;
 }
 
 const SIGNAL_COLORS: Record<string, string> = {
@@ -57,6 +59,8 @@ export default function TrafficMap({
   speed,
   ambulancePosition,
   ambulanceRoute,
+  signalLocationPickMode,
+  onSignalLocationPick,
 }: TrafficMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -68,9 +72,10 @@ export default function TrafficMap({
   const ambulanceMarkerRef = useRef<L.Marker | null>(null);
   const ambulancePolylineRef = useRef<L.Polyline | null>(null);
   const [mapLayer, setMapLayer] = useState<'street' | 'satellite'>('street');
-  const [settingPoint, setSettingPoint] = useState<'start' | 'end' | null>(null);
+  const [settingPoint, setSettingPoint] = useState<'start' | 'end' | 'signal' | null>(null);
   const startMarkerRef = useRef<L.Marker | null>(null);
   const endMarkerRef = useRef<L.Marker | null>(null);
+  const signalPickMarkerRef = useRef<L.Marker | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [hasRoute, setHasRoute] = useState(false);
 
@@ -235,13 +240,24 @@ export default function TrafficMap({
     };
   }, []);
 
-  // Handle map clicks for start/end point
+  // Handle map clicks for start/end/signal point
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
     const handler = (e: L.LeafletMouseEvent) => {
       if (!settingPoint) return;
+
+      if (settingPoint === 'signal') {
+        if (signalPickMarkerRef.current) map.removeLayer(signalPickMarkerRef.current);
+        signalPickMarkerRef.current = L.marker(e.latlng, { title: 'Selected signal location' })
+          .addTo(map)
+          .bindTooltip('Selected signal location', { permanent: true, direction: 'top', className: 'marker-label' });
+
+        onSignalLocationPick?.(e.latlng.lat, e.latlng.lng);
+        setSettingPoint(null);
+        return;
+      }
 
       if (settingPoint === 'start') {
         if (startMarkerRef.current) map.removeLayer(startMarkerRef.current);
@@ -270,7 +286,23 @@ export default function TrafficMap({
     return () => {
       map.off('click', handler);
     };
-  }, [settingPoint]);
+  }, [settingPoint, onSignalLocationPick]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (signalLocationPickMode) {
+      setSettingPoint('signal');
+    } else if (settingPoint === 'signal') {
+      setSettingPoint(null);
+    }
+
+    if (!signalLocationPickMode && signalPickMarkerRef.current) {
+      map.removeLayer(signalPickMarkerRef.current);
+      signalPickMarkerRef.current = null;
+    }
+  }, [signalLocationPickMode, settingPoint]);
 
   // Layer switching
   useEffect(() => {
@@ -360,7 +392,7 @@ export default function TrafficMap({
       const popupContent = `
         <div style="font-family: 'JetBrains Mono', monospace; background: #1a1f2e; color: #e2e8f0; padding: 8px; border-radius: 6px; min-width: 160px;">
           <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">${signal.id}</div>
-          <div style="font-size: 12px; color: #a0aec0; margin-bottom: 4px;">${meta?.roadName || ''}</div>
+          <div style="font-size: 12px; color: #a0aec0; margin-bottom: 4px;">${signal.roadName || meta?.roadName || ''}</div>
           <div style="color: ${SIGNAL_COLORS[currentState]}; font-weight: 600;">● ${currentState}</div>
           <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; margin-top: 4px;">${countdownText}</div>
         </div>

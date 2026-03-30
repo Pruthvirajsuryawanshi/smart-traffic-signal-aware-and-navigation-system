@@ -8,6 +8,7 @@ export interface TrafficSignal {
   updated_at: string;
   roadName?: string;
   type?: 'highway' | 'side';
+  intersection?: string;
 }
 
 export interface SignalRuntime {

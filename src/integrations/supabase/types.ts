@@ -21,6 +21,9 @@ export type Database = {
           longitude: number
           state: string
           updated_at: string
+          road_name?: string
+          intersection?: string
+          type?: string
         }
         Insert: {
           id: string
@@ -28,12 +31,36 @@ export type Database = {
           longitude: number
           state?: string
           updated_at?: string
+          road_name?: string
+          intersection?: string
+          type?: string
         }
         Update: {
           id?: string
           latitude?: number
           longitude?: number
           state?: string
+          updated_at?: string
+          road_name?: string
+          intersection?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      intersection_ips: {
+        Row: {
+          intersection: string
+          ip: string
+          updated_at: string
+        }
+        Insert: {
+          intersection: string
+          ip: string
+          updated_at?: string
+        }
+        Update: {
+          intersection?: string
+          ip?: string
           updated_at?: string
         }
         Relationships: []

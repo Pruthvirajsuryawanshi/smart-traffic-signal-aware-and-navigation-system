@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { useState, useEffect, useMemo } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 export type SignalConfig = {
@@ -7,7 +7,6 @@ export type SignalConfig = {
   intersection: string;
   latitude: number;
   longitude: number;
-  ip: string;
   roadName: string;
   type: 'highway' | 'side';
 };
@@ -15,27 +14,88 @@ export type SignalConfig = {
 interface SettingsPanelProps {
   signalConfigs: SignalConfig[];
   onSignalConfigsChange: (configs: SignalConfig[]) => void;
+  onSaveSignalConfigs: (configs: SignalConfig[]) => Promise<boolean>;
+  savingSignalConfigs: boolean;
+  newSignalLat: string;
+  newSignalLng: string;
+  onNewSignalLatChange: (value: string) => void;
+  onNewSignalLngChange: (value: string) => void;
+  isPickingSignalLocation: boolean;
+  onToggleSignalPickLocation: () => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  intersectionIPs: Record<string, string>;
+  onIntersectionIpChange: (intersection: string, ip: string) => void;
+  onSaveIntersectionIPs: () => Promise<void>;
+  savingIntersectionIPs: boolean;
+  intersectionIPMessage?: string | null;
 }
 
-export default function SettingsPanel({ signalConfigs, onSignalConfigsChange, open, onOpenChange }: SettingsPanelProps) {
+export default function SettingsPanel({
+  signalConfigs,
+  onSignalConfigsChange,
+  onSaveSignalConfigs,
+  savingSignalConfigs,
+  newSignalLat,
+  newSignalLng,
+  onNewSignalLatChange,
+  onNewSignalLngChange,
+  isPickingSignalLocation,
+  onToggleSignalPickLocation,
+  open,
+  onOpenChange,
+  intersectionIPs,
+  onIntersectionIpChange,
+  onSaveIntersectionIPs,
+  savingIntersectionIPs,
+  intersectionIPMessage,
+}: SettingsPanelProps) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const [editedConfigs, setEditedConfigs] = useState<SignalConfig[]>(signalConfigs);
+  const [expandedIntersections, setExpandedIntersections] = useState<Set<string>>(new Set());
+  const [activeIntersection, setActiveIntersection] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
   // New intersection form
   const [newIntId, setNewIntId] = useState('');
   const [newIntIp, setNewIntIp] = useState('');
+  const [pendingIntersection, setPendingIntersection] = useState<string | null>(null);
 
   // New signal form
   const [newSigId, setNewSigId] = useState('');
   const [newSigInt, setNewSigInt] = useState('');
-  const [newSigLat, setNewSigLat] = useState('');
-  const [newSigLng, setNewSigLng] = useState('');
   const [newSigRoad, setNewSigRoad] = useState('');
   const [newSigType, setNewSigType] = useState<'highway' | 'side'>('highway');
+
+  useEffect(() => {
+    if (!open) return;
+    setEditedConfigs(signalConfigs);
+    const initialIds = new Set(signalConfigs.map((config) => config.intersection));
+    setExpandedIntersections(initialIds);
+    setActiveIntersection(signalConfigs[0]?.intersection ?? null);
+    setSaveMessage(null);
+    // Keep local edits intact while the panel remains open.
+    // Only reset when the panel is opened fresh.
+  }, [open]);
+
+  const intersections = useMemo(
+    () => [...new Set(editedConfigs.map((c) => c.intersection))].sort(),
+    [editedConfigs],
+  );
+
+  const hasUnsavedChanges = useMemo(
+    () => JSON.stringify(editedConfigs) !== JSON.stringify(signalConfigs),
+    [editedConfigs, signalConfigs],
+  );
+
+  const draftSignals = useMemo(
+    () => editedConfigs.filter((config) => !signalConfigs.some((original) => original.id === config.id)),
+    [editedConfigs, signalConfigs],
+  );
 
   const handleLogin = () => {
     if (username.trim() === 'admin' && password === 'admin') {
@@ -48,14 +108,15 @@ export default function SettingsPanel({ signalConfigs, onSignalConfigsChange, op
     }
   };
 
-  const intersections = [...new Set(signalConfigs.map((c) => c.intersection))].sort();
-
   const handleAddIntersection = () => {
-    if (!newIntId.trim()) { setError('Intersection ID required'); return; }
-    if (intersections.includes(newIntId.trim())) { setError('Intersection already exists'); return; }
-    // Just validates — signals will be added separately
+    const newIntersection = newIntId.trim();
+    if (!newIntersection) { setError('Intersection ID required'); return; }
+    if (!newIntIp.trim()) { setError('ESP32 IP required'); return; }
+    if (intersections.includes(newIntersection)) { setError('Intersection already exists'); return; }
     setError(null);
-    setNewSigInt(newIntId.trim());
+    onIntersectionIpChange(newIntersection, newIntIp.trim());
+    setPendingIntersection(newIntersection);
+    setNewSigInt(newIntersection);
     setNewIntId('');
     setNewIntIp('');
   };
@@ -64,29 +125,87 @@ export default function SettingsPanel({ signalConfigs, onSignalConfigsChange, op
     const id = newSigId.trim();
     const intId = newSigInt.trim();
     if (!id || !intId) { setError('Signal ID and Intersection are required'); return; }
-    if (signalConfigs.some((c) => c.id === id)) { setError('Signal ID already exists'); return; }
-    const lat = Number(newSigLat);
-    const lng = Number(newSigLng);
+    if (editedConfigs.some((c) => c.id === id)) { setError('Signal ID already exists'); return; }
+    const lat = Number(newSignalLat);
+    const lng = Number(newSignalLng);
     if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) { setError('Valid latitude and longitude required'); return; }
 
-    onSignalConfigsChange([
-      ...signalConfigs,
-      { id, intersection: intId, latitude: lat, longitude: lng, ip: '', roadName: newSigRoad.trim() || id, type: newSigType },
+    setEditedConfigs((current) => [
+      ...current,
+      { id, intersection: intId, latitude: lat, longitude: lng, roadName: newSigRoad.trim() || id, type: newSigType },
     ]);
     setError(null);
     setNewSigId('');
-    setNewSigLat('');
-    setNewSigLng('');
+    onNewSignalLatChange('');
+    onNewSignalLngChange('');
     setNewSigRoad('');
   };
 
+  const buildDraftSignal = () => {
+    const id = newSigId.trim();
+    const intId = newSigInt.trim() || newIntId.trim();
+    if (!id || !intId) { return null; }
+    const lat = Number(newSignalLat);
+    const lng = Number(newSignalLng);
+    if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) { return null; }
+
+    return {
+      id,
+      intersection: intId,
+      latitude: lat,
+      longitude: lng,
+      roadName: newSigRoad.trim() || id,
+      type: newSigType,
+    } as SignalConfig;
+  };
+
+  const handleSaveNew = async () => {
+    const draftSignal = buildDraftSignal();
+
+    if (!draftSignal && !hasUnsavedChanges && !pendingIntersection) {
+      setError('Complete the signal details before saving.');
+      return;
+    }
+
+    if (draftSignal && editedConfigs.some((c) => c.id === draftSignal.id)) {
+      setError('Signal ID already exists');
+      return;
+    }
+
+    setError(null);
+
+    const configsToSave = draftSignal ? [...editedConfigs, draftSignal] : editedConfigs;
+    setEditedConfigs(configsToSave);
+    setSaveMessage('Saving new signal and intersection...');
+
+    if (pendingIntersection) {
+      await onSaveIntersectionIPs();
+    }
+
+    const success = await onSaveSignalConfigs(configsToSave);
+    if (success) {
+      onSignalConfigsChange(configsToSave);
+      setSaveMessage('New signal saved and map updated.');
+      setNewSigId('');
+      onNewSignalLatChange('');
+      onNewSignalLngChange('');
+      setNewSigRoad('');
+      setNewSigType('highway');
+      setNewIntId('');
+      setNewIntIp('');
+      setPendingIntersection(null);
+    } else {
+      setSaveMessage('Unable to save changes. Please try again.');
+    }
+  };
+
   const handleRemoveSignal = (id: string) => {
-    onSignalConfigsChange(signalConfigs.filter((c) => c.id !== id));
+    setEditedConfigs((current) => current.filter((c) => c.id !== id));
   };
 
   const handleConfigChange = (id: string, field: keyof SignalConfig, value: string) => {
-    onSignalConfigsChange(
-      signalConfigs.map((c) =>
+    setEditedConfigs((current) =>
+      current.map((c) =>
         c.id === id
           ? { ...c, [field]: field === 'latitude' || field === 'longitude' ? Number(value) : value }
           : c,
@@ -94,9 +213,40 @@ export default function SettingsPanel({ signalConfigs, onSignalConfigsChange, op
     );
   };
 
+  const handleSaveAll = async () => {
+    setSaveMessage('Saving changes...');
+    const success = await onSaveSignalConfigs(editedConfigs);
+    if (success) {
+      onSignalConfigsChange(editedConfigs);
+      setSaveMessage('All changes saved globally.');
+    } else {
+      setSaveMessage('Unable to save changes. Please try again.');
+    }
+  };
+
+  const handleUndoAll = () => {
+    setEditedConfigs(signalConfigs);
+    const ids = new Set(signalConfigs.map((config) => config.intersection));
+    setExpandedIntersections(ids);
+    setSaveMessage('Unsaved changes reverted.');
+  };
+
+  const toggleIntersection = (intersection: string) => {
+    setExpandedIntersections((current) => {
+      const next = new Set(current);
+      if (next.has(intersection)) {
+        next.delete(intersection);
+      } else {
+        next.add(intersection);
+      }
+      return next;
+    });
+    setActiveIntersection(intersection);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl w-[90vw] max-h-[85vh] overflow-hidden flex flex-col">
+<DialogContent className="left-0 top-0 translate-x-0 translate-y-0 max-w-none w-screen h-screen max-h-none overflow-hidden flex flex-col rounded-none">
         <DialogHeader>
           <DialogTitle className="font-mono">⚙️ Admin Settings</DialogTitle>
           <DialogDescription>Manage intersections, signals, and ESP32 configuration.</DialogDescription>
@@ -139,81 +289,175 @@ export default function SettingsPanel({ signalConfigs, onSignalConfigsChange, op
               </button>
             </div>
 
-            <Tabs defaultValue="intersections" className="flex-1 flex flex-col overflow-hidden">
+            <Tabs defaultValue="esp32ips" className="flex-1 flex flex-col overflow-hidden">
               <TabsList className="w-full">
+                <TabsTrigger value="esp32ips" className="flex-1 text-xs font-mono">Intersection ESP32 IPs</TabsTrigger>
                 <TabsTrigger value="intersections" className="flex-1 text-xs font-mono">Intersections</TabsTrigger>
                 <TabsTrigger value="add" className="flex-1 text-xs font-mono">+ Add New</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="intersections" className="flex-1 overflow-y-auto pr-1">
-                <div className="space-y-4">
+              <TabsContent value="esp32ips" className="flex-1 overflow-y-auto pr-1">
+                <div className="rounded-lg border border-border bg-secondary/30 p-3 mb-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h3 className="text-xs font-mono font-bold text-foreground uppercase tracking-wider">
+                        Intersection ESP32 IPs
+                      </h3>
+                      <p className="text-[10px] font-mono text-muted-foreground mt-1">
+                        One IP per intersection. Save to make changes persistent across devices.
+                      </p>
+                    </div>
+                    <button
+                      onClick={onSaveIntersectionIPs}
+                      disabled={savingIntersectionIPs}
+                      className="rounded-md bg-primary px-3 py-2 text-xs font-mono font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {savingIntersectionIPs ? 'Saving…' : 'Save IPs'}
+                    </button>
+                  </div>
+                  <div className="grid gap-3 mt-4">
+                    {intersections.map((intId) => (
+                      <label key={intId} className="text-[9px] font-mono text-muted-foreground">
+                        {intId} IP
+                        <input
+                          value={intersectionIPs[intId] || ''}
+                          onChange={(e) => onIntersectionIpChange(intId, e.target.value)}
+                          placeholder="e.g. 192.168.1.100"
+                          className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-[11px] text-foreground"
+                        />
+                      </label>
+                    ))}
+                    {intersections.length === 0 && (
+                      <p className="text-[10px] text-muted-foreground">No intersections configured yet.</p>
+                    )}
+                  </div>
+                  {intersectionIPMessage && (
+                    <p className="text-[10px] mt-3 font-mono text-muted-foreground">{intersectionIPMessage}</p>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="intersections" className="flex-1 overflow-hidden pr-1">
+                <div className="sticky top-0 z-20 border-b border-border bg-card/95 pb-4 pt-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-xs font-mono font-bold text-foreground uppercase tracking-wider">Intersections</h3>
+                      <p className="text-[10px] font-mono text-muted-foreground mt-1">
+                        Edit intersection signals and save changes when ready.
+                      </p>
+                      <p className={`mt-2 text-[10px] font-mono ${hasUnsavedChanges ? 'text-signal-yellow' : 'text-muted-foreground'}`}>
+                        {hasUnsavedChanges ? 'Unsaved changes' : 'All changes saved'}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <button
+                        onClick={handleUndoAll}
+                        disabled={!hasUnsavedChanges}
+                        className="rounded-md border border-border bg-background px-3 py-2 text-xs font-mono text-foreground hover:bg-secondary disabled:opacity-50"
+                      >
+                        Undo
+                      </button>
+                      <button
+                        onClick={handleSaveAll}
+                        disabled={!hasUnsavedChanges || savingSignalConfigs}
+                        className="rounded-md bg-primary px-3 py-2 text-xs font-mono font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        {savingSignalConfigs ? 'Saving…' : 'Save All Changes'}
+                      </button>
+                    </div>
+                  </div>
+                  {saveMessage && <p className="mt-2 text-[10px] font-mono text-muted-foreground">{saveMessage}</p>}
+                </div>
+
+                <div className="mt-4 space-y-4 overflow-y-auto pr-1 pb-4" style={{ maxHeight: '70vh' }}>
                   {intersections.map((intId) => {
-                    const intSignals = signalConfigs.filter((c) => c.intersection === intId);
+                    const intSignals = editedConfigs.filter((c) => c.intersection === intId);
+                    const isExpanded = expandedIntersections.has(intId);
+                    const isActive = activeIntersection === intId;
+
                     return (
-                      <div key={intId} className="rounded-lg border border-border bg-secondary/30 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-mono font-bold text-primary uppercase tracking-wider">{intId}</span>
-                          <span className="text-[10px] font-mono text-muted-foreground">{intSignals.length} signals</span>
-                        </div>
-                        <div className="space-y-2">
-                          {intSignals.map((config) => (
-                            <div key={config.id} className="rounded-md border border-border bg-background p-2.5">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-bold font-mono text-foreground">{config.id}</span>
-                                <div className="flex items-center gap-1">
-                                  <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${config.type === 'highway' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                                    {config.type}
-                                  </span>
-                                  <button onClick={() => handleRemoveSignal(config.id)} className="text-[10px] font-mono text-destructive hover:underline ml-1">
-                                    ✕
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-1.5">
-                                <label className="text-[9px] font-mono text-muted-foreground">
-                                  Road
-                                  <input
-                                    value={config.roadName}
-                                    onChange={(e) => handleConfigChange(config.id, 'roadName', e.target.value)}
-                                    className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1 text-[11px] text-foreground"
-                                  />
-                                </label>
-                                <label className="text-[9px] font-mono text-muted-foreground">
-                                  ESP32 IP
-                                  <input
-                                    value={config.ip}
-                                    onChange={(e) => handleConfigChange(config.id, 'ip', e.target.value)}
-                                    className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1 text-[11px] text-foreground"
-                                    placeholder="10.x.x.x"
-                                  />
-                                </label>
-                                <label className="text-[9px] font-mono text-muted-foreground">
-                                  Lat
-                                  <input
-                                    value={config.latitude}
-                                    onChange={(e) => handleConfigChange(config.id, 'latitude', e.target.value)}
-                                    className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1 text-[11px] text-foreground"
-                                    type="number"
-                                    step="0.000001"
-                                  />
-                                </label>
-                                <label className="text-[9px] font-mono text-muted-foreground">
-                                  Lng
-                                  <input
-                                    value={config.longitude}
-                                    onChange={(e) => handleConfigChange(config.id, 'longitude', e.target.value)}
-                                    className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1 text-[11px] text-foreground"
-                                    type="number"
-                                    step="0.000001"
-                                  />
-                                </label>
-                              </div>
+                      <div
+                        key={intId}
+                        className={`overflow-hidden rounded-2xl border ${isActive ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-secondary/30'} transition-all duration-200`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleIntersection(intId)}
+                          className="w-full px-4 py-3 text-left"
+                        >
+                          <div className="flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-xs font-mono font-bold text-foreground uppercase tracking-wider">{intId}</p>
+                              <p className="text-[10px] font-mono text-muted-foreground mt-1">{intSignals.length} signals</p>
                             </div>
-                          ))}
-                        </div>
+                            <span className="text-[10px] font-mono text-muted-foreground">
+                              {isExpanded ? 'Collapse' : 'Expand'}
+                            </span>
+                          </div>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="border-t border-border bg-card/80 px-4 py-4">
+                            <div className="grid gap-4">
+                              {intSignals.length > 0 ? (
+                                intSignals.map((config) => (
+                                  <div key={config.id} className="rounded-xl border border-border bg-background p-4 shadow-sm">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                      <div>
+                                        <p className="text-xs font-bold font-mono text-foreground">{config.id}</p>
+                                        <p className="text-[10px] font-mono text-muted-foreground">{config.type === 'highway' ? 'Highway signal' : 'Side road signal'}</p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveSignal(config.id)}
+                                        className="rounded-md border border-destructive px-2 py-1 text-[10px] font-mono text-destructive hover:bg-destructive/10"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+
+                                    <div className="grid gap-3 md:grid-cols-3">
+                                      <label className="text-[10px] font-mono text-muted-foreground">
+                                        Road
+                                        <input
+                                          value={config.roadName}
+                                          onChange={(e) => handleConfigChange(config.id, 'roadName', e.target.value)}
+                                          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground"
+                                        />
+                                      </label>
+                                      <label className="text-[10px] font-mono text-muted-foreground">
+                                        Lat
+                                        <input
+                                          value={config.latitude}
+                                          onChange={(e) => handleConfigChange(config.id, 'latitude', e.target.value)}
+                                          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground"
+                                          type="number"
+                                          step="0.000001"
+                                        />
+                                      </label>
+                                      <label className="text-[10px] font-mono text-muted-foreground">
+                                        Lng
+                                        <input
+                                          value={config.longitude}
+                                          onChange={(e) => handleConfigChange(config.id, 'longitude', e.target.value)}
+                                          className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm text-foreground"
+                                          type="number"
+                                          step="0.000001"
+                                        />
+                                      </label>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-[10px] font-mono text-muted-foreground">No signals configured for this intersection.</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
+
                   {intersections.length === 0 && (
                     <p className="text-xs font-mono text-muted-foreground text-center py-4">No intersections configured</p>
                   )}
@@ -250,6 +494,13 @@ export default function SettingsPanel({ signalConfigs, onSignalConfigsChange, op
                     <p className="text-[9px] font-mono text-muted-foreground mt-1.5">
                       Create intersection first, then add signals to it below.
                     </p>
+                    <button
+                      type="button"
+                      onClick={handleAddIntersection}
+                      className="mt-3 rounded-md bg-primary px-3 py-2 text-xs font-mono font-semibold text-primary-foreground hover:bg-primary/90"
+                    >
+                      Add Intersection
+                    </button>
                   </div>
 
                   {/* Add Signal */}
@@ -286,8 +537,8 @@ export default function SettingsPanel({ signalConfigs, onSignalConfigsChange, op
                       <label className="text-[9px] font-mono text-muted-foreground">
                         Latitude
                         <input
-                          value={newSigLat}
-                          onChange={(e) => setNewSigLat(e.target.value)}
+                          value={newSignalLat}
+                          onChange={(e) => onNewSignalLatChange(e.target.value)}
                           className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1 text-[11px] text-foreground"
                           type="number"
                           step="0.000001"
@@ -297,14 +548,28 @@ export default function SettingsPanel({ signalConfigs, onSignalConfigsChange, op
                       <label className="text-[9px] font-mono text-muted-foreground">
                         Longitude
                         <input
-                          value={newSigLng}
-                          onChange={(e) => setNewSigLng(e.target.value)}
+                          value={newSignalLng}
+                          onChange={(e) => onNewSignalLngChange(e.target.value)}
                           className="mt-0.5 w-full rounded border border-border bg-background px-2 py-1 text-[11px] text-foreground"
                           type="number"
                           step="0.000001"
                           placeholder="75.246"
                         />
                       </label>
+                      <div className="col-span-2 flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={onToggleSignalPickLocation}
+                          className="w-full rounded-md border border-border bg-background px-3 py-2 text-[10px] font-mono text-foreground hover:bg-secondary"
+                        >
+                          {isPickingSignalLocation ? 'Cancel map pick' : 'Pick location on map'}
+                        </button>
+                        <p className="text-[9px] font-mono text-muted-foreground">
+                          {isPickingSignalLocation
+                            ? 'Click anywhere on the map to choose the new signal location.'
+                            : 'Use the map picker to automatically fill latitude and longitude for this signal.'}
+                        </p>
+                      </div>
                       <label className="text-[9px] font-mono text-muted-foreground">
                         Road Name
                         <input
@@ -327,12 +592,56 @@ export default function SettingsPanel({ signalConfigs, onSignalConfigsChange, op
                       </label>
                     </div>
                     {error && <p className="text-[10px] text-destructive mt-2">{error}</p>}
-                    <button
-                      onClick={handleAddSignal}
-                      className="mt-3 w-full rounded-md bg-primary px-3 py-2 text-xs font-mono font-semibold text-primary-foreground hover:bg-primary/90"
-                    >
-                      + Add Signal
-                    </button>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <button
+                        onClick={handleAddSignal}
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-xs font-mono font-semibold text-foreground hover:bg-secondary"
+                        type="button"
+                      >
+                        + Add Signal to draft
+                      </button>
+                      <button
+                        onClick={handleSaveNew}
+                        disabled={savingSignalConfigs || savingIntersectionIPs}
+                        className="w-full rounded-md bg-primary px-3 py-2 text-xs font-mono font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                        type="button"
+                      >
+                        {savingSignalConfigs || savingIntersectionIPs ? 'Saving…' : 'Save New Signal'}
+                      </button>
+                    </div>
+                    {pendingIntersection && (
+                      <p className="text-[9px] font-mono text-muted-foreground mt-2">
+                        Added intersection <span className="font-semibold text-foreground">{pendingIntersection}</span>. Add more signals to this intersection before saving.
+                      </p>
+                    )}
+                    {draftSignals.length > 0 && (
+                      <div className="mt-3 rounded-lg border border-border bg-background p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[10px] font-mono font-semibold text-foreground">Draft signals</p>
+                          <span className="text-[9px] font-mono text-muted-foreground">{draftSignals.length}</span>
+                        </div>
+                        <div className="space-y-2 text-[9px] font-mono text-muted-foreground">
+                          {draftSignals.map((draft) => (
+                            <div key={draft.id} className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-3 py-2">
+                              <div>
+                                <p className="font-semibold text-foreground">{draft.id}</p>
+                                <p>{draft.intersection} · {draft.latitude.toFixed(6)}, {draft.longitude.toFixed(6)}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSignal(draft.id)}
+                                className="rounded-md border border-destructive px-2 py-1 text-[10px] font-mono text-destructive hover:bg-destructive/10"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-[9px] font-mono text-muted-foreground mt-2">
+                      Use Save to persist the new intersection and signals, then refresh the map.
+                    </p>
                   </div>
                 </div>
               </TabsContent>

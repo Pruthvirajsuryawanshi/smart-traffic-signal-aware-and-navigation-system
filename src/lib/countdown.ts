@@ -18,12 +18,12 @@ function signalNumericId(signalId: string): number {
  * All timers derived from the active signal's updated_at anchor.
  */
 function getGlobalIntersectionCountdown(signalId: string, signals: TrafficSignal[]): CountdownResult | null {
-  const intersection = SIGNAL_METADATA[signalId]?.intersection;
+  const intersection = signals.find((signal) => signal.id === signalId)?.intersection ?? SIGNAL_METADATA[signalId]?.intersection;
   if (!intersection) return null;
 
   // Get all signals in this intersection, sorted by numeric ID
   const intersectionSignals = signals
-    .filter((signal) => SIGNAL_METADATA[signal.id]?.intersection === intersection)
+    .filter((signal) => (signal.intersection ?? SIGNAL_METADATA[signal.id]?.intersection) === intersection)
     .sort((a, b) => signalNumericId(a.id) - signalNumericId(b.id));
 
   if (intersectionSignals.length === 0) return null;

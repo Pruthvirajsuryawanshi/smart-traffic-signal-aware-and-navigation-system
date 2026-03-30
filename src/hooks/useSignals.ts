@@ -23,8 +23,9 @@ export function useSignals() {
     if (!error && data) {
       const enriched = (data as unknown as TrafficSignal[]).map((signal) => ({
         ...signal,
-        roadName: SIGNAL_METADATA[signal.id]?.roadName || signal.id,
-        type: SIGNAL_METADATA[signal.id]?.type || 'highway',
+        intersection: signal.intersection ?? SIGNAL_METADATA[signal.id]?.intersection,
+        roadName: (signal.roadName ?? signal['road_name'] ?? SIGNAL_METADATA[signal.id]?.roadName) || 'default',
+        type: (signal.type ?? SIGNAL_METADATA[signal.id]?.type) || 'highway',
       }));
 
       setSignals(enriched);
@@ -33,7 +34,7 @@ export function useSignals() {
 
       const byIntersection = new Map<string, TrafficSignal[]>();
       for (const signal of enriched) {
-        const intersection = SIGNAL_METADATA[signal.id]?.intersection ?? 'default';
+        const intersection = signal.intersection ?? SIGNAL_METADATA[signal.id]?.intersection ?? 'default';
         if (!byIntersection.has(intersection)) byIntersection.set(intersection, []);
         byIntersection.get(intersection)!.push(signal);
       }
@@ -115,9 +116,11 @@ export function useSignals() {
     await fetchSignals();
   }, [fetchSignals]);
 
+  const refreshSignals = useCallback(fetchSignals, [fetchSignals]);
+
   const getRuntime = useCallback((id: string) => {
     return runtimesRef.current.get(id);
   }, []);
 
-  return { signals, loading, updateSignal, getRuntime, runtimes: runtimesRef };
+  return { signals, loading, updateSignal, refreshSignals, getRuntime, runtimes: runtimesRef };
 }

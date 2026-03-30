@@ -30,7 +30,7 @@ export default function AdminPanel({
   getRuntime,
 }: AdminPanelProps) {
   const grouped = signals.reduce<Record<string, TrafficSignal[]>>((acc, signal) => {
-    const intId = SIGNAL_METADATA[signal.id]?.intersection || 'Unknown';
+    const intId = signal.intersection ?? (SIGNAL_METADATA[signal.id]?.intersection || 'Unknown');
     if (!acc[intId]) acc[intId] = [];
     acc[intId].push(signal);
     return acc;

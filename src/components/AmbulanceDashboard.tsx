@@ -104,7 +104,7 @@ const AmbulanceDashboard = ({
       {/* ESP32 IP Configuration */}
       <div className="bg-secondary/50 rounded-md px-3 py-2 space-y-1.5">
         <span className="text-[10px] font-mono text-muted-foreground block">ESP32 IPs (optional)</span>
-        {['INT-1', 'INT-2'].map((intId) => (
+        {(Object.keys(esp32IPs).length > 0 ? Object.keys(esp32IPs) : ['INT-1', 'INT-2']).map((intId) => (
           <div key={intId} className="flex items-center gap-2">
             <span className="text-[10px] font-mono text-foreground w-10">{intId}:</span>
             <input

@@ -109,7 +109,8 @@ export function useAmbulanceSimulation(signals: TrafficSignal[], routeSignals: R
       return false;
     }
 
-    const intId = SIGNAL_METADATA[signalId]?.intersection || (signalId.startsWith('SIG-1') ? 'INT-1' : 'INT-2');
+    const currentSignal = signals.find((signal) => signal.id === signalId);
+    const intId = currentSignal?.intersection ?? (SIGNAL_METADATA[signalId]?.intersection || (signalId.startsWith('SIG-1') ? 'INT-1' : 'INT-2'));
     const ip = esp32IPs[intId];
     if (!ip) {
       console.warn('[ESP32] No IP configured for', intId);
@@ -145,7 +146,7 @@ export function useAmbulanceSimulation(signals: TrafficSignal[], routeSignals: R
       console.warn('[ESP32] ⚠️ Make sure ESP32 is powered on and connected to same WiFi');
       return false;
     }
-  }, [esp32IPs, isLocalNetwork]);
+  }, [esp32IPs, isLocalNetwork, signals]);
 
   /**
    * Override signal to GREEN via ESP32.
@@ -180,7 +181,7 @@ export function useAmbulanceSimulation(signals: TrafficSignal[], routeSignals: R
       activeOverrideRef.current = null;
     }
     // Clear the command cache so future emergencies can re-trigger
-    const intId = SIGNAL_METADATA[signalId]?.intersection || (signalId.startsWith('SIG-1') ? 'INT-1' : 'INT-2');
+    const intId = signals.find((signal) => signal.id === signalId)?.intersection ?? (SIGNAL_METADATA[signalId]?.intersection || (signalId.startsWith('SIG-1') ? 'INT-1' : 'INT-2'));
     delete lastESP32CommandRef.current[intId];
 
     console.log('[Ambulance] Restoring normal for:', signalId, '(resets timer)');
@@ -238,7 +239,7 @@ export function useAmbulanceSimulation(signals: TrafficSignal[], routeSignals: R
           state: signal.state,
           arrivalSec: 0,
           waitSec: 0,
-          roadName: SIGNAL_METADATA[signal.id]?.roadName ?? signal.id,
+          roadName: signal.roadName ?? SIGNAL_METADATA[signal.id]?.roadName ?? signal.id,
         };
       })
       .filter((info): info is RouteSignalInfo => info !== null)

@@ -7,13 +7,14 @@ import RouteSignalPanel from '@/components/RouteSignalPanel';
 import AmbulanceDashboard from '@/components/AmbulanceDashboard';
 import AmbulanceLogin from '@/components/AmbulanceLogin';
 import SettingsPanel from '@/components/SettingsPanel';
+import { supabase } from '@/integrations/supabase/client';
 import type { SignalConfig } from '@/components/SettingsPanel';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { SIGNAL_METADATA } from '@/types/signal';
 import type { RouteSignalInfo } from '@/types/signal';
 
 const Index = () => {
-  const { signals, loading, updateSignal, getRuntime, runtimes } = useSignals();
+  const { signals, loading, updateSignal, refreshSignals, getRuntime, runtimes } = useSignals();
   const [routeSignals, setRouteSignals] = useState<RouteSignalInfo[]>([]);
   const [routeDistance, setRouteDistance] = useState(0);
   const [speed, setSpeed] = useState(35);
@@ -22,6 +23,13 @@ const Index = () => {
   const [ambulanceLoggedIn, setAmbulanceLoggedIn] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [signalConfigs, setSignalConfigs] = useState<SignalConfig[]>([]);
+  const [newSignalLat, setNewSignalLat] = useState('');
+  const [newSignalLng, setNewSignalLng] = useState('');
+  const [isPickingSignalLocation, setIsPickingSignalLocation] = useState(false);
+  const [savingSignalConfigs, setSavingSignalConfigs] = useState(false);
+  const [intersectionIPs, setIntersectionIPs] = useState<Record<string, string>>({});
+  const [savingIntersectionIPs, setSavingIntersectionIPs] = useState(false);
+  const [intersectionIPMessage, setIntersectionIPMessage] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') !== 'light';
@@ -40,12 +48,11 @@ const Index = () => {
   useEffect(() => {
     const initialConfigs: SignalConfig[] = signals.map((signal) => ({
       id: signal.id,
-      intersection: SIGNAL_METADATA[signal.id]?.intersection || 'UNKNOWN',
+      intersection: signal.intersection ?? (SIGNAL_METADATA[signal.id]?.intersection || 'UNKNOWN'),
       latitude: signal.latitude,
       longitude: signal.longitude,
-      ip: '',
-      roadName: SIGNAL_METADATA[signal.id]?.roadName || signal.id,
-      type: SIGNAL_METADATA[signal.id]?.type || 'highway',
+      roadName: (signal.roadName ?? SIGNAL_METADATA[signal.id]?.roadName) || signal.id,
+      type: (signal.type ?? SIGNAL_METADATA[signal.id]?.type) || 'highway',
     }));
 
     setSignalConfigs((current) => {
@@ -59,6 +66,70 @@ const Index = () => {
     });
   }, [signals]);
 
+  const fetchIntersectionIPs = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('intersection_ips')
+      .select('intersection, ip');
+
+    if (!error && data) {
+      const map = (data as Array<{ intersection: string; ip: string }>).reduce<Record<string, string>>(
+        (acc, row) => {
+          acc[row.intersection] = row.ip ?? '';
+          return acc;
+        },
+        {},
+      );
+      setIntersectionIPs(map);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchIntersectionIPs();
+  }, [fetchIntersectionIPs]);
+
+  const handleIntersectionIpChange = useCallback((intersection: string, ip: string) => {
+    setIntersectionIPs((current) => ({ ...current, [intersection]: ip }));
+  }, []);
+
+  const toggleSignalLocationPick = useCallback(() => {
+    setIsPickingSignalLocation((current) => !current);
+  }, []);
+
+  const handleSignalLocationPick = useCallback((lat: number, lng: number) => {
+    setNewSignalLat(lat.toFixed(6));
+    setNewSignalLng(lng.toFixed(6));
+    setIsPickingSignalLocation(false);
+  }, []);
+
+  const saveIntersectionIPs = useCallback(async () => {
+    setIntersectionIPMessage(null);
+    setSavingIntersectionIPs(true);
+
+    const payload = Object.entries(intersectionIPs).map(([intersection, ip]) => ({
+      intersection,
+      ip,
+    }));
+
+    if (payload.length === 0) {
+      setIntersectionIPMessage('No intersection IPs to save.');
+      setSavingIntersectionIPs(false);
+      return;
+    }
+
+    const { error } = await supabase.from('intersection_ips').upsert(payload, {
+      onConflict: 'intersection',
+    });
+
+    if (error) {
+      setIntersectionIPMessage('Unable to save intersection IPs.');
+    } else {
+      setIntersectionIPMessage('Intersection IPs saved.');
+      await fetchIntersectionIPs();
+    }
+
+    setSavingIntersectionIPs(false);
+  }, [intersectionIPs, fetchIntersectionIPs]);
+
   const handleRouteSignals = useCallback((info: RouteSignalInfo[]) => {
     setRouteSignals(info);
   }, []);
@@ -66,6 +137,33 @@ const Index = () => {
   const handleRouteDistance = useCallback((d: number) => {
     setRouteDistance(d);
   }, []);
+
+  const saveSignalConfigs = useCallback(async (configs: SignalConfig[]) => {
+    setSavingSignalConfigs(true);
+    const payload = configs.map((config) => ({
+      id: config.id,
+      latitude: config.latitude,
+      longitude: config.longitude,
+      intersection: config.intersection,
+      type: config.type,
+      road_name: config.roadName,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabase.from('traffic_signals').upsert(payload, {
+      onConflict: 'id',
+    });
+
+    setSavingSignalConfigs(false);
+
+    if (error) {
+      return false;
+    }
+
+    setSignalConfigs(configs);
+    await refreshSignals();
+    return true;
+  }, [refreshSignals]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -93,8 +191,21 @@ const Index = () => {
         <SettingsPanel
           signalConfigs={signalConfigs}
           onSignalConfigsChange={setSignalConfigs}
+          onSaveSignalConfigs={saveSignalConfigs}
+          savingSignalConfigs={savingSignalConfigs}
+          newSignalLat={newSignalLat}
+          newSignalLng={newSignalLng}
+          onNewSignalLatChange={setNewSignalLat}
+          onNewSignalLngChange={setNewSignalLng}
+          isPickingSignalLocation={isPickingSignalLocation}
+          onToggleSignalPickLocation={toggleSignalLocationPick}
           open={settingsOpen}
           onOpenChange={setSettingsOpen}
+          intersectionIPs={intersectionIPs}
+          onIntersectionIpChange={handleIntersectionIpChange}
+          onSaveIntersectionIPs={saveIntersectionIPs}
+          savingIntersectionIPs={savingIntersectionIPs}
+          intersectionIPMessage={intersectionIPMessage}
         />
 
         {/* Status bar */}
@@ -159,8 +270,8 @@ const Index = () => {
                 onStop={ambulance.stop}
                 onReset={ambulance.reset}
                 routeLength={ambulance.route.length}
-                esp32IPs={ambulance.esp32IPs}
-                onESP32IPChange={(intId, ip) => ambulance.setEsp32IPs((prev) => ({ ...prev, [intId]: ip }))}
+                esp32IPs={intersectionIPs}
+                onESP32IPChange={handleIntersectionIpChange}
               />
             )}
           </TabsContent>
@@ -191,6 +302,8 @@ const Index = () => {
           speed={speed}
           ambulancePosition={ambulance.status.position}
           ambulanceRoute={ambulance.route}
+          signalLocationPickMode={isPickingSignalLocation}
+          onSignalLocationPick={handleSignalLocationPick}
         />
 
         {/* Mobile: floating status pill + theme toggle */}
@@ -281,8 +394,8 @@ const Index = () => {
                 onStop={ambulance.stop}
                 onReset={ambulance.reset}
                 routeLength={ambulance.route.length}
-                esp32IPs={ambulance.esp32IPs}
-                onESP32IPChange={(intId, ip) => ambulance.setEsp32IPs((prev) => ({ ...prev, [intId]: ip }))}
+                esp32IPs={intersectionIPs}
+                onESP32IPChange={handleIntersectionIpChange}
               />
             )}
           </div>
