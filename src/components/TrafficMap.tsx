@@ -499,7 +499,7 @@ export default function TrafficMap({
   }, [onRouteSignals, onRouteDistance]);
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full border-[5px] border-primary rounded-xl overflow-hidden">
       <div id="traffic-map" className="h-full w-full" />
 
       {/* Search - top center, shifts right on mobile to avoid status pill */}
@@ -527,7 +527,7 @@ export default function TrafficMap({
         <div className="flex gap-1">
           <button
             onClick={() => setMapLayer('street')}
-            className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold transition-all duration-150 ease-out transform active:scale-95 active:translate-y-0.5 ${
               mapLayer === 'street'
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-card text-card-foreground border border-border hover:bg-secondary'
@@ -537,7 +537,7 @@ export default function TrafficMap({
           </button>
           <button
             onClick={() => setMapLayer('satellite')}
-            className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold transition-all duration-150 ease-out transform active:scale-95 active:translate-y-0.5 ${
               mapLayer === 'satellite'
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-card text-card-foreground border border-border hover:bg-secondary'
@@ -549,7 +549,7 @@ export default function TrafficMap({
         <div className="flex gap-1">
           <button
             onClick={() => setSettingPoint('start')}
-            className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold transition-all duration-150 ease-out transform active:scale-95 active:translate-y-0.5 ${
             settingPoint === 'start'
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-card text-card-foreground border border-border hover:bg-secondary'
@@ -559,7 +559,7 @@ export default function TrafficMap({
           </button>
           <button
             onClick={() => setSettingPoint('end')}
-            className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold transition-all ${
+            className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold transition-all duration-150 ease-out transform active:scale-95 active:translate-y-0.5 ${
               settingPoint === 'end'
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-card text-card-foreground border border-border hover:bg-secondary'
@@ -570,7 +570,7 @@ export default function TrafficMap({
           {hasRoute && (
             <button
               onClick={clearRoute}
-              className="px-3 py-1.5 rounded-md text-xs font-mono font-semibold bg-card text-card-foreground border border-border hover:bg-secondary"
+              className="px-3 py-1.5 rounded-md text-xs font-mono font-semibold bg-card text-card-foreground border border-border hover:bg-secondary transition-all duration-150 ease-out transform active:scale-95 active:translate-y-0.5"
             >
               ✕ Clear
             </button>

@@ -37,7 +37,7 @@ const Index = () => {
     return true;
   });
 
-  const ambulance = useAmbulanceSimulation(signals, routeSignals);
+  const ambulance = useAmbulanceSimulation(signals, routeSignals, intersectionIPs);
 
   const mapSignals = useMemo(() => {
     const existingIds = new Set(signals.map((signal) => signal.id));

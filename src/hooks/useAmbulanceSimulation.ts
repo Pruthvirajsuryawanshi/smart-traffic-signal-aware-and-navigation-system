@@ -25,7 +25,11 @@ const ROUTE_BEHIND_MARGIN_M = 20;
 const ACTIVE_SIGNAL_HOLD_MARGIN_M = 80;
 const NEXT_SIGNAL_MIN_AHEAD_M = 50;
 
-export function useAmbulanceSimulation(signals: TrafficSignal[], routeSignals: RouteSignalInfo[] = []) {
+export function useAmbulanceSimulation(
+  signals: TrafficSignal[],
+  routeSignals: RouteSignalInfo[] = [],
+  externalEsp32IPs: Record<string, string> = {},
+) {
   const [route, setRoute] = useState<AmbulancePoint[]>([]);
   const [status, setStatus] = useState<AmbulanceStatus>({
     position: null,
@@ -37,10 +41,13 @@ export function useAmbulanceSimulation(signals: TrafficSignal[], routeSignals: R
     overriddenSignals: new Set(),
   });
   const [speed, setSpeed] = useState(1.5);
-  const [esp32IPs, setEsp32IPs] = useState<Record<string, string>>({
-    'INT-1': '10.149.4.20',
-    'INT-2': '10.179.91.20',
-  });
+
+  const esp32IPs = Object.keys(externalEsp32IPs).length > 0
+    ? externalEsp32IPs
+    : {
+        'INT-1': '10.149.4.20',
+        'INT-2': '10.179.91.20',
+      };
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const indexRef = useRef(0);
@@ -444,6 +451,5 @@ export function useAmbulanceSimulation(signals: TrafficSignal[], routeSignals: R
     stop,
     reset,
     esp32IPs,
-    setEsp32IPs,
   };
 }
