@@ -292,8 +292,8 @@ export default function TrafficMap({
     if (!map || signals.length === 0) return;
 
     const routeSignalIds = new Set<string>();
-    const routeCoords = ambulanceRoute && ambulanceRoute.length > 1
-      ? ambulanceRoute
+    const routeCoords: { lat: number; lng: number }[] | null = ambulanceRoute && ambulanceRoute.length > 1
+      ? ambulanceRoute.map((p) => ({ lat: p.lat, lng: p.lon }))
       : activeRouteRef.current;
 
     // Analyze route if active
