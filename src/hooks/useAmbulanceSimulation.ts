@@ -18,9 +18,9 @@ export interface AmbulanceStatus {
   overriddenSignals: Set<string>;
 }
 
-// Detection: 300m approach, 300m passed to restore
-const APPROACH_THRESHOLD_M = 300;
-const PASSED_RESTORE_M = 300;
+// Detection: 300m approach, 200m passed to restore
+const APPROACH_THRESHOLD_M = 200;
+const PASSED_RESTORE_M = 200;
 const ROUTE_BEHIND_MARGIN_M = 20;
 const ACTIVE_SIGNAL_HOLD_MARGIN_M = 80;
 const NEXT_SIGNAL_MIN_AHEAD_M = 50;
@@ -46,7 +46,7 @@ export function useAmbulanceSimulation(
     ? externalEsp32IPs
     : {
         'INT-1': '10.149.4.20',
-        'INT-2': '10.179.91.20',
+        'INT-2': '10.76.192.20',
       };
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -271,16 +271,29 @@ export function useAmbulanceSimulation(
         : undefined;
 
       if (activeRouteSignal) {
+        const activeSignalPos = { lat: activeRouteSignal.signal.latitude, lng: activeRouteSignal.signal.longitude };
+        const actualDistanceFromActiveSignal = haversineMeters({ lat: pos.lat, lng: pos.lon }, activeSignalPos);
+
         if (currentRouteDistance <= activeRouteSignal.distanceFromStart + ACTIVE_SIGNAL_HOLD_MARGIN_M) {
           console.log('[Ambulance] Holding active route signal', activeOverrideRef.current, 'until ambulance passes it');
           return activeOverrideRef.current;
         }
 
-        if (currentRouteDistance >= activeRouteSignal.distanceFromStart + PASSED_RESTORE_M) {
-          console.log('[Ambulance] Passed active route signal by route distance, restoring', activeOverrideRef.current);
-          restoreSignal(activeOverrideRef.current);
-          return null;
+        if (actualDistanceFromActiveSignal < PASSED_RESTORE_M) {
+          console.log(
+            '[Ambulance] Holding active route signal until ambulance is',
+            PASSED_RESTORE_M,
+            'm from',
+            activeOverrideRef.current,
+            'actualDist=',
+            Math.round(actualDistanceFromActiveSignal)
+          );
+          return activeOverrideRef.current;
         }
+
+        console.log('[Ambulance] Passed active route signal and is far enough to restore', activeOverrideRef.current, 'dist=', Math.round(actualDistanceFromActiveSignal));
+        restoreSignal(activeOverrideRef.current);
+        return null;
       }
 
       let bestSignal: { id: string; dist: number } | null = null;
