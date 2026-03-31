@@ -50,43 +50,15 @@ Deno.serve(async (req) => {
   const now = new Date().toISOString()
 
   const normalizedEntries = flatEntries.map(([id, state]) => [id, String(state).toUpperCase()] as const)
-  const greenEntries = normalizedEntries.filter(([, state]) => state === 'GREEN')
 
-  let results
-  if (greenEntries.length > 0) {
-    const [activeGreenId] = greenEntries[greenEntries.length - 1]
-
-    const resetAll = await supabase
-      .from('traffic_signals')
-      .update({ state: 'RED', updated_at: now })
-      .not('id', 'is', null)
-
-    const applyGreen = await supabase
-      .from('traffic_signals')
-      .update({ state: 'GREEN', updated_at: now })
-      .eq('id', activeGreenId)
-
-    const extraEntries = normalizedEntries.filter(([id, state]) => id !== activeGreenId && state !== 'GREEN')
-    const extraUpdates = await Promise.all(
-      extraEntries.map(([id, state]) =>
-        supabase
-          .from('traffic_signals')
-          .update({ state, updated_at: now })
-          .eq('id', id)
-      )
+  const results = await Promise.all(
+    normalizedEntries.map(([id, state]) =>
+      supabase
+        .from('traffic_signals')
+        .update({ state, updated_at: now })
+        .eq('id', id)
     )
-
-    results = [resetAll, applyGreen, ...extraUpdates]
-  } else {
-    results = await Promise.all(
-      normalizedEntries.map(([id, state]) =>
-        supabase
-          .from('traffic_signals')
-          .update({ state, updated_at: now })
-          .eq('id', id)
-      )
-    )
-  }
+  )
 
   const errors = results.filter(r => r.error)
 
