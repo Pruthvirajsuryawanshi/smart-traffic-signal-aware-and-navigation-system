@@ -40,21 +40,10 @@ const Index = () => {
   const ambulance = useAmbulanceSimulation(signals, routeSignals, intersectionIPs);
 
   const mapSignals = useMemo(() => {
-    const existingIds = new Set(signals.map((signal) => signal.id));
-    const fallbackSignals: TrafficSignal[] = signalConfigs
-      .filter((config) => !existingIds.has(config.id))
-      .map((config) => ({
-        id: config.id,
-        latitude: config.latitude,
-        longitude: config.longitude,
-        intersection: config.intersection,
-        roadName: config.roadName,
-        type: config.type,
-        state: 'RED',
-        updated_at: new Date().toISOString(),
-      }));
-    return [...signals, ...fallbackSignals];
-  }, [signals, signalConfigs]);
+    // Only use signals from database - never override with fallback
+    // Fallback signals caused interference by showing hardcoded 'RED' states
+    return signals;
+  }, [signals]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);

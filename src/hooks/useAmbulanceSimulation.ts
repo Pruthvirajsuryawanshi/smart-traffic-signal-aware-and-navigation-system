@@ -45,7 +45,7 @@ export function useAmbulanceSimulation(
   const esp32IPs = Object.keys(externalEsp32IPs).length > 0
     ? externalEsp32IPs
     : {
-        'INT-1': '10.149.4.20',
+        'INT-1': '10.76.192.118',
         'INT-2': '10.76.192.20',
       };
 
@@ -148,8 +148,9 @@ export function useAmbulanceSimulation(
       console.log('[ESP32] Response body:', data);
       lastESP32CommandRef.current[intId] = commandKey;
       return data?.ok === true;
-    } catch (e: any) {
-      console.error(`[ESP32] Network error for ${intId} (${ip}):`, e.message);
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      console.error(`[ESP32] Network error for ${intId} (${ip}):`, errorMessage);
       console.warn('[ESP32] ⚠️ Make sure ESP32 is powered on and connected to same WiFi');
       return false;
     }

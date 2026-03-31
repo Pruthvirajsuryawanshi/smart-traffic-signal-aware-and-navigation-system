@@ -64,7 +64,7 @@ export default function TrafficMap({
 }: TrafficMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
-  const routingControlRef = useRef<any>(null);
+  const routingControlRef = useRef<L.Routing.Control | null>(null);
   const activeRouteRef = useRef<{ lat: number; lng: number }[] | null>(null);
   const streetLayerRef = useRef<L.TileLayer | null>(null);
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
@@ -104,7 +104,7 @@ export default function TrafficMap({
     satelliteLayerRef.current = satelliteLayer;
 
     // Initialize routing control
-    const routingControl = (L as any).Routing.control({
+    const routingControl = L.Routing.control({
       waypoints: [],
       routeWhileDragging: true,
       addWaypoints: true,
@@ -114,7 +114,7 @@ export default function TrafficMap({
       lineOptions: {
         styles: [{ color: '#38bdf8', opacity: 0.9, weight: 6 }],
       },
-      createMarker(i: number, waypoint: any, n: number) {
+      createMarker(i: number, waypoint: L.Routing.Waypoint, n: number) {
         const isStart = i === 0;
         const isEnd = i === n - 1;
         const label = isStart ? 'Start' : isEnd ? 'Destination' : `Waypoint ${i + 1}`;
@@ -188,10 +188,10 @@ export default function TrafficMap({
       rcContainer.appendChild(collapseBtn);
     }
 
-    routingControl.on('routesfound', (event: any) => {
+    routingControl.on('routesfound', (event: L.Routing.RoutingResultEvent) => {
       if (rcContainer) rcContainer.style.display = '';
       const route = event.routes[0];
-      activeRouteRef.current = route.coordinates.map((c: any) => ({
+      activeRouteRef.current = route.coordinates.map((c: L.LatLng) => ({
         lat: c.lat,
         lng: c.lng,
       }));
@@ -383,6 +383,17 @@ export default function TrafficMap({
       onRouteSignals?.([]);
     }
 
+    // Get current signal IDs
+    const currentSignalIds = new Set(signals.map(s => s.id));
+    
+    // Remove markers for signals that no longer exist
+    markersRef.current.forEach((marker, markerId) => {
+      if (!currentSignalIds.has(markerId)) {
+        map.removeLayer(marker);
+        markersRef.current.delete(markerId);
+      }
+    });
+
     // Update markers
     signals.forEach((signal) => {
       const currentState = signal.state;
@@ -401,6 +412,7 @@ export default function TrafficMap({
       `;
 
       if (existing) {
+        // Always update icon to ensure correct state display
         existing.setIcon(createSignalIcon(currentState, onRoute));
         existing.setPopupContent(popupContent);
       } else {

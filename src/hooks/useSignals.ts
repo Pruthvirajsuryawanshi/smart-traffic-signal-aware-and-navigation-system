@@ -1,18 +1,15 @@
-// Signal sync hook - follows DB state from ESP32 hardware
+// Signal sync hook - Isolated version: prevents cross-interference
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { TrafficSignal, SignalState, SignalRuntime } from '@/types/signal';
 import { SIGNAL_METADATA, DEFAULT_SETTINGS } from '@/types/signal';
 
-function signalSortKey(id: string): number {
-  const parsed = Number(id.replace(/\D/g, ''));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 export function useSignals() {
   const [signals, setSignals] = useState<TrafficSignal[]>([]);
   const [loading, setLoading] = useState(true);
   const runtimesRef = useRef<Map<string, SignalRuntime>>(new Map());
+  // Cache to prevent signal loss during interference
+  const signalCacheRef = useRef<Map<string, TrafficSignal>>(new Map());
 
   const fetchSignals = useCallback(async () => {
     const { data, error } = await supabase
@@ -21,77 +18,50 @@ export function useSignals() {
       .order('id', { ascending: true });
 
     if (!error && data) {
-      const enriched = (data as unknown as TrafficSignal[]).map((signal) => ({
+      // Merge with cache to prevent signal loss
+      const mergedData = [...data];
+      
+      // Check if any cached signals are missing from fetch (interference detection)
+      const fetchedIds = new Set(data.map(s => s.id));
+      signalCacheRef.current.forEach((cachedSignal, id) => {
+        if (!fetchedIds.has(id)) {
+          // Signal missing from fetch - use cached version
+          console.warn(`[useSignals] Signal ${id} missing from fetch, using cache`);
+          mergedData.push(cachedSignal);
+        }
+      });
+
+      // Enrich signals with metadata
+      const enriched = (mergedData as unknown as TrafficSignal[]).map((signal) => ({
         ...signal,
         intersection: signal.intersection ?? SIGNAL_METADATA[signal.id]?.intersection,
         roadName: (signal.roadName ?? signal['road_name'] ?? SIGNAL_METADATA[signal.id]?.roadName) || 'default',
         type: (signal.type ?? SIGNAL_METADATA[signal.id]?.type) || 'highway',
       }));
 
+      // Update cache with fresh data
+      enriched.forEach(signal => {
+        signalCacheRef.current.set(signal.id, signal);
+      });
+
       setSignals(enriched);
 
-      const currentIds = new Set(enriched.map((signal) => signal.id));
-
-      const byIntersection = new Map<string, TrafficSignal[]>();
-      for (const signal of enriched) {
-        const intersection = signal.intersection ?? SIGNAL_METADATA[signal.id]?.intersection ?? 'default';
-        if (!byIntersection.has(intersection)) byIntersection.set(intersection, []);
-        byIntersection.get(intersection)!.push(signal);
-      }
-
-      for (const [, intSignalsRaw] of byIntersection) {
-        const intSignals = [...intSignalsRaw].sort((a, b) => signalSortKey(a.id) - signalSortKey(b.id));
-        const activeSignal =
-          intSignals.find((signal) => signal.state === 'GREEN') ??
-          intSignals.find((signal) => signal.state === 'YELLOW') ??
-          intSignals
-            .slice()
-            .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0];
-
-        if (!activeSignal) continue;
-
-        const activeIndex = intSignals.findIndex((signal) => signal.id === activeSignal.id);
-        const anchorMs = Date.parse(activeSignal.updated_at);
-        const safeAnchorMs = Number.isFinite(anchorMs) ? anchorMs : Date.now();
-
-        const green = DEFAULT_SETTINGS.cycle.GREEN;
-        const yellow = DEFAULT_SETTINGS.cycle.YELLOW;
-        const slotDuration = green + yellow;
-        const red = slotDuration * Math.max(intSignals.length - 1, 1);
-        const totalCycle = slotDuration * Math.max(intSignals.length, 1);
-
-        const elapsedFromAnchor = Math.max(0, Math.floor((Date.now() - safeAnchorMs) / 1000));
-        const phasePos = elapsedFromAnchor % totalCycle;
-        const slotShift = Math.floor(phasePos / slotDuration);
-        const slotOffset = phasePos % slotDuration;
-        const activeNowIndex = (activeIndex + slotShift) % intSignals.length;
-
-        intSignals.forEach((signal, index) => {
-          let state: SignalState = 'RED';
-          let elapsed = green + yellow;
-
-          if (index === activeNowIndex) {
-            if (slotOffset < green) {
-              state = 'GREEN';
-              elapsed = slotOffset;
-            } else {
-              state = 'YELLOW';
-              elapsed = green + (slotOffset - green);
-            }
-          } else {
-            const distanceSlots = (activeNowIndex - index + intSignals.length) % intSignals.length;
-            const redElapsed = Math.max(0, (distanceSlots - 1) * slotDuration + slotOffset);
-            elapsed = green + yellow + Math.min(redElapsed, Math.max(red - 1, 0));
-          }
-
-          runtimesRef.current.set(signal.id, {
-            elapsed,
-            cycle: { GREEN: green, YELLOW: yellow, RED: red },
-            state,
-          });
+      // Create runtime info for each signal - NO CYCLE CALCULATION
+      // Just use the actual state from database
+      enriched.forEach((signal) => {
+        runtimesRef.current.set(signal.id, {
+          elapsed: 0,
+          cycle: { 
+            GREEN: DEFAULT_SETTINGS.cycle.GREEN, 
+            YELLOW: DEFAULT_SETTINGS.cycle.YELLOW, 
+            RED: DEFAULT_SETTINGS.cycle.RED 
+          },
+          state: signal.state as SignalState,
         });
-      }
+      });
 
+      // Clean up removed signals
+      const currentIds = new Set(enriched.map((signal) => signal.id));
       Array.from(runtimesRef.current.keys()).forEach((id) => {
         if (!currentIds.has(id)) {
           runtimesRef.current.delete(id);
@@ -104,15 +74,19 @@ export function useSignals() {
 
   useEffect(() => {
     fetchSignals();
-    const interval = setInterval(fetchSignals, 1000);
-    return () => clearInterval(interval);
+    
+    // Fast polling for responsive updates (500ms)
+    const interval = setInterval(fetchSignals, 500);
+
+    return () => {
+      clearInterval(interval);
+    };
   }, [fetchSignals]);
 
   const updateSignal = useCallback(async (id: string, state: SignalState) => {
     await supabase.functions.invoke('update-signals', {
       body: { [id]: state },
     });
-
     await fetchSignals();
   }, [fetchSignals]);
 

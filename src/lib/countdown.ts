@@ -126,7 +126,7 @@ function getLegacyCountdown(state: string, updatedAt: string): CountdownResult {
 
 /**
  * Calculate countdown to next state change.
- * Uses global intersection timer synced with ESP32.
+ * SIMPLE VERSION: Just returns the actual state, no calculation.
  */
 export function getCountdown(
   state: string,
@@ -134,12 +134,14 @@ export function getCountdown(
   signalId?: string,
   signals?: TrafficSignal[]
 ): CountdownResult {
-  if (signalId && signals?.length) {
-    const globalCountdown = getGlobalIntersectionCountdown(signalId, signals);
-    if (globalCountdown) return globalCountdown;
-  }
-
-  return getLegacyCountdown(state, updatedAt);
+  // Just return the actual state from database - no calculation at all
+  const actualState = state as SignalState;
+  
+  return {
+    currentState: actualState,
+    nextState: actualState === 'GREEN' ? 'YELLOW' : actualState === 'YELLOW' ? 'RED' : 'GREEN',
+    remainingSec: 0,
+  };
 }
 
 /** Format countdown as "YELLOW in: 15s" */

@@ -23,6 +23,13 @@ Deno.serve(async (req) => {
   )
 
   const body = await req.json()
+  
+  // Generate request ID for tracking
+  const requestId = crypto.randomUUID()
+  
+  // Log incoming request for debugging
+  console.log(`[update-signals:${requestId}] Received:`, JSON.stringify(body))
+  console.log(`[update-signals:${requestId}] From IP:`, req.headers.get('x-forwarded-for') || 'unknown')
 
   // Support both flat and nested formats:
   // Flat:   { "SIG-101": "RED", "SIG-102": "GREEN" }
@@ -40,6 +47,8 @@ Deno.serve(async (req) => {
       }
     }
   }
+  
+  console.log(`[update-signals:${requestId}] Processing entries:`, flatEntries)
 
   if (flatEntries.length === 0) {
     return new Response(JSON.stringify({ success: true, updated: 0 }), {
@@ -47,29 +56,32 @@ Deno.serve(async (req) => {
     })
   }
 
-  const now = new Date().toISOString()
-
   const normalizedEntries = flatEntries.map(([id, state]) => [id, String(state).toUpperCase()] as const)
 
+  // Update each signal - single table approach with strict isolation
   const results = await Promise.all(
-    normalizedEntries.map(([id, state]) =>
-      supabase
+    normalizedEntries.map(([id, state], index) => {
+      // Add small offset (10ms per signal) to prevent identical timestamps
+      const updateTime = new Date(Date.now() + index * 10).toISOString()
+      return supabase
         .from('traffic_signals')
-        .update({ state, updated_at: now })
+        .update({ state, updated_at: updateTime })
         .eq('id', id)
-    )
+    })
   )
 
-  const errors = results.filter(r => r.error)
+  const errors = results.filter((r: { error: any }) => r.error)
 
   if (errors.length > 0) {
-    return new Response(JSON.stringify({ error: 'Some updates failed', details: errors.map(e => e.error) }), {
+    console.log(`[update-signals:${requestId}] Errors:`, errors.map((e: { error: any }) => e.error))
+    return new Response(JSON.stringify({ error: 'Some updates failed', requestId, details: errors.map((e: { error: any }) => e.error) }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
-  return new Response(JSON.stringify({ success: true }), {
+  console.log(`[update-signals:${requestId}] Success: Updated ${flatEntries.length} signals`)
+  return new Response(JSON.stringify({ success: true, requestId, updated: flatEntries.length }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 })
