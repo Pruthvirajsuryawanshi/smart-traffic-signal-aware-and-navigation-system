@@ -710,7 +710,7 @@ export default function SettingsPanel({
                             </div>
                             <button
                               type="button"
-                              onClick={() => handleRemoveDraftSignal(signal.id)}
+                              onClick={() => handleRemoveDraftSignal(signal.draftKey)}
                               className="rounded-md border border-destructive px-2 py-1 text-[10px] font-mono text-destructive hover:bg-destructive/10"
                             >
                               Remove
@@ -721,7 +721,7 @@ export default function SettingsPanel({
                               Signal ID
                               <input
                                 value={signal.id}
-                                onChange={(e) => handleDraftSignalChange(signal.id, 'id', e.target.value)}
+                                onChange={(e) => handleDraftSignalChange(signal.draftKey, 'id', e.target.value)}
                                 className="mt-1 h-9 w-full rounded border border-border bg-background px-2 text-sm text-foreground"
                               />
                             </label>
@@ -729,7 +729,7 @@ export default function SettingsPanel({
                               Road name
                               <input
                                 value={signal.roadName}
-                                onChange={(e) => handleDraftSignalChange(signal.id, 'roadName', e.target.value)}
+                                onChange={(e) => handleDraftSignalChange(signal.draftKey, 'roadName', e.target.value)}
                                 className="mt-1 h-9 w-full rounded border border-border bg-background px-2 text-sm text-foreground"
                               />
                             </label>
@@ -739,7 +739,7 @@ export default function SettingsPanel({
                               Latitude
                               <input
                                 value={signal.latitude}
-                                onChange={(e) => handleDraftSignalChange(signal.id, 'latitude', e.target.value)}
+                                onChange={(e) => handleDraftSignalChange(signal.draftKey, 'latitude', e.target.value)}
                                 className="mt-1 h-9 w-full rounded border border-border bg-background px-2 text-sm text-foreground"
                                 type="number"
                                 step="0.000001"
@@ -749,7 +749,7 @@ export default function SettingsPanel({
                               Longitude
                               <input
                                 value={signal.longitude}
-                                onChange={(e) => handleDraftSignalChange(signal.id, 'longitude', e.target.value)}
+                                onChange={(e) => handleDraftSignalChange(signal.draftKey, 'longitude', e.target.value)}
                                 className="mt-1 h-9 w-full rounded border border-border bg-background px-2 text-sm text-foreground"
                                 type="number"
                                 step="0.000001"
@@ -760,7 +760,7 @@ export default function SettingsPanel({
                             Type
                             <select
                               value={signal.type}
-                              onChange={(e) => handleDraftSignalChange(signal.id, 'type', e.target.value)}
+                              onChange={(e) => handleDraftSignalChange(signal.draftKey, 'type', e.target.value)}
                               className="mt-1 h-9 w-full rounded border border-border bg-background px-2 text-sm text-foreground"
                             >
                               <option value="highway">Highway</option>
