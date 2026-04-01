@@ -21,9 +21,6 @@ export type Database = {
           longitude: number
           state: string
           updated_at: string
-          road_name?: string
-          intersection?: string
-          type?: string
         }
         Insert: {
           id: string
@@ -31,9 +28,6 @@ export type Database = {
           longitude: number
           state?: string
           updated_at?: string
-          road_name?: string
-          intersection?: string
-          type?: string
         }
         Update: {
           id?: string
@@ -41,27 +35,72 @@ export type Database = {
           longitude?: number
           state?: string
           updated_at?: string
-          road_name?: string
-          intersection?: string
-          type?: string
         }
         Relationships: []
       }
-      intersection_ips: {
+      traffic_signals_int1: {
         Row: {
-          intersection: string
-          ip: string
-          updated_at: string
+          id: string
+          intersection: string | null
+          latitude: number | null
+          longitude: number | null
+          road_name: string | null
+          state: string
+          type: string | null
+          updated_at: string | null
         }
         Insert: {
-          intersection: string
-          ip: string
-          updated_at?: string
+          id: string
+          intersection?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          road_name?: string | null
+          state?: string
+          type?: string | null
+          updated_at?: string | null
         }
         Update: {
-          intersection?: string
-          ip?: string
-          updated_at?: string
+          id?: string
+          intersection?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          road_name?: string | null
+          state?: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      traffic_signals_int2: {
+        Row: {
+          id: string
+          intersection: string | null
+          latitude: number | null
+          longitude: number | null
+          road_name: string | null
+          state: string
+          type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id: string
+          intersection?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          road_name?: string | null
+          state?: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          intersection?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          road_name?: string | null
+          state?: string
+          type?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
