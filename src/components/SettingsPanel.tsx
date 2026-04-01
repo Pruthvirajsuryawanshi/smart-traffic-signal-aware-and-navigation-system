@@ -739,7 +739,7 @@ export default function SettingsPanel({
                               Latitude
                               <input
                                 value={signal.latitude}
-                                onChange={(e) => handleDraftSignalChange(signal.id, 'latitude', e.target.value)}
+                                onChange={(e) => handleDraftSignalChange(signal.draftKey, 'latitude', e.target.value)}
                                 className="mt-1 h-9 w-full rounded border border-border bg-background px-2 text-sm text-foreground"
                                 type="number"
                                 step="0.000001"
