@@ -710,7 +710,7 @@ export default function SettingsPanel({
                             </div>
                             <button
                               type="button"
-                              onClick={() => handleRemoveDraftSignal(signal.id)}
+                              onClick={() => handleRemoveDraftSignal(signal.draftKey)}
                               className="rounded-md border border-destructive px-2 py-1 text-[10px] font-mono text-destructive hover:bg-destructive/10"
                             >
                               Remove
