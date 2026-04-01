@@ -142,46 +142,88 @@ const Index = () => {
   const saveSignalConfigs = useCallback(async (configs: SignalConfig[]) => {
     setSavingSignalConfigs(true);
 
-    const existingIds = new Set(signals.map((signal) => signal.id));
-    const idsToDelete = Array.from(existingIds).filter(
-      (id) => !configs.some((config) => config.id === id),
-    );
+    try {
+      // Group configs by intersection
+      const byIntersection = configs.reduce<Record<string, SignalConfig[]>>((acc, config) => {
+        const intId = config.intersection;
+        if (!acc[intId]) acc[intId] = [];
+        acc[intId].push(config);
+        return acc;
+      }, {});
 
-    if (idsToDelete.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('traffic_signals')
-        .delete()
-        .in('id', idsToDelete);
+      // Determine the table for each intersection
+      const getTable = (intId: string) => {
+        const num = intId.match(/INT-(\d+)/i)?.[1];
+        return num ? `traffic_signals_int${num}` as 'traffic_signals_int1' | 'traffic_signals_int2' : null;
+      };
 
-      if (deleteError) {
-        setSavingSignalConfigs(false);
-        return false;
+      // Build update payload per table via edge function
+      const updatePayload: Record<string, string> = {};
+      for (const config of configs) {
+        updatePayload[config.id] = 'RED'; // preserve state, just update metadata
       }
-    }
 
-    const payload = configs.map((config) => ({
-      id: config.id,
-      latitude: config.latitude,
-      longitude: config.longitude,
-      intersection: config.intersection,
-      type: config.type,
-      road_name: config.roadName,
-      updated_at: new Date().toISOString(),
-    }));
+      // Use direct table updates for each intersection
+      for (const [intId, intConfigs] of Object.entries(byIntersection)) {
+        const table = getTable(intId);
+        if (!table) continue;
 
-    const { error } = await supabase.from('traffic_signals').upsert(payload, {
-      onConflict: 'id',
-    });
+        // Get existing IDs in this table
+        const { data: existing } = await supabase.from(table).select('id');
+        const existingIds = new Set((existing || []).map((r: any) => r.id));
+        const newConfigIds = new Set(intConfigs.map(c => c.id));
 
-    setSavingSignalConfigs(false);
+        // Delete removed signals
+        const toDelete = Array.from(existingIds).filter(id => !newConfigIds.has(id));
+        if (toDelete.length > 0) {
+          for (const id of toDelete) {
+            await supabase.from(table).delete().eq('id', id);
+          }
+        }
 
-    if (error) {
+        // Upsert signals
+        const payload = intConfigs.map((config) => ({
+          id: config.id,
+          latitude: config.latitude,
+          longitude: config.longitude,
+          intersection: config.intersection,
+          type: config.type,
+          road_name: config.roadName,
+          state: 'RED',
+          updated_at: new Date().toISOString(),
+        }));
+
+        const { error } = await supabase.from(table).upsert(payload, { onConflict: 'id' });
+        if (error) {
+          console.error(`Error saving to ${table}:`, error);
+          setSavingSignalConfigs(false);
+          return false;
+        }
+      }
+
+      // Handle deleted intersections - check if any existing signals are no longer in configs
+      const existingIntersections = new Set(signals.map(s => s.intersection).filter(Boolean));
+      const newIntersections = new Set(configs.map(c => c.intersection));
+      for (const intId of existingIntersections) {
+        if (!intId || newIntersections.has(intId)) continue;
+        const table = getTable(intId);
+        if (!table) continue;
+        // Delete all signals from removed intersection
+        const sigIds = signals.filter(s => s.intersection === intId).map(s => s.id);
+        for (const id of sigIds) {
+          await supabase.from(table).delete().eq('id', id);
+        }
+      }
+
+      setSignalConfigs(configs);
+      await refreshSignals();
+      setSavingSignalConfigs(false);
+      return true;
+    } catch (e) {
+      console.error('Save error:', e);
+      setSavingSignalConfigs(false);
       return false;
     }
-
-    setSignalConfigs(configs);
-    await refreshSignals();
-    return true;
   }, [refreshSignals, signals]);
 
   return (
