@@ -749,7 +749,7 @@ export default function SettingsPanel({
                               Longitude
                               <input
                                 value={signal.longitude}
-                                onChange={(e) => handleDraftSignalChange(signal.id, 'longitude', e.target.value)}
+                                onChange={(e) => handleDraftSignalChange(signal.draftKey, 'longitude', e.target.value)}
                                 className="mt-1 h-9 w-full rounded border border-border bg-background px-2 text-sm text-foreground"
                                 type="number"
                                 step="0.000001"
