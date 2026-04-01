@@ -114,7 +114,7 @@ export default function TrafficMap({
       lineOptions: {
         styles: [{ color: '#38bdf8', opacity: 0.9, weight: 6 }],
       },
-      createMarker(i: number, waypoint: L.Routing.Waypoint, n: number) {
+      createMarker(i: number, waypoint: any, n: number) {
         const isStart = i === 0;
         const isEnd = i === n - 1;
         const label = isStart ? 'Start' : isEnd ? 'Destination' : `Waypoint ${i + 1}`;
