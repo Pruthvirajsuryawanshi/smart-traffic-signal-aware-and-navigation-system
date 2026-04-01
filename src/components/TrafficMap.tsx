@@ -64,7 +64,7 @@ export default function TrafficMap({
 }: TrafficMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
-  const routingControlRef = useRef<L.Routing.Control | null>(null);
+  const routingControlRef = useRef<any>(null);
   const activeRouteRef = useRef<{ lat: number; lng: number }[] | null>(null);
   const streetLayerRef = useRef<L.TileLayer | null>(null);
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
