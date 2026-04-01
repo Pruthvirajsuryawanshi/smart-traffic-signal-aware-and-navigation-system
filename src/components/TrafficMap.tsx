@@ -104,7 +104,7 @@ export default function TrafficMap({
     satelliteLayerRef.current = satelliteLayer;
 
     // Initialize routing control
-    const routingControl = L.Routing.control({
+    const routingControl = (L as any).Routing.control({
       waypoints: [],
       routeWhileDragging: true,
       addWaypoints: true,
