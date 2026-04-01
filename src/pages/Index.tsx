@@ -127,7 +127,6 @@ const Index = () => {
 
     setIntersectionIPMessage('Intersection IPs saved.');
     await fetchIntersectionIPs();
-    }
 
     setSavingIntersectionIPs(false);
   }, [intersectionIPs, fetchIntersectionIPs]);
