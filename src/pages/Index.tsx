@@ -117,9 +117,13 @@ const Index = () => {
       return;
     }
 
-    const { error } = await supabase.from('intersection_ips').upsert(payload, {
-      onConflict: 'intersection',
-    });
+    try {
+      localStorage.setItem('intersection_ips', JSON.stringify(intersectionIPs));
+    } catch (e) {
+      setIntersectionIPMessage('Unable to save intersection IPs.');
+      setSavingIntersectionIPs(false);
+      return;
+    }
 
     if (error) {
       setIntersectionIPMessage('Unable to save intersection IPs.');
