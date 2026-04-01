@@ -125,11 +125,8 @@ const Index = () => {
       return;
     }
 
-    if (error) {
-      setIntersectionIPMessage('Unable to save intersection IPs.');
-    } else {
-      setIntersectionIPMessage('Intersection IPs saved.');
-      await fetchIntersectionIPs();
+    setIntersectionIPMessage('Intersection IPs saved.');
+    await fetchIntersectionIPs();
     }
 
     setSavingIntersectionIPs(false);
