@@ -15,18 +15,24 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_ANON_KEY')!
   )
 
-  const { data, error } = await supabase
-    .from('traffic_signals')
-    .select('*')
+  // Fetch from both intersection tables independently
+  const [int1Result, int2Result] = await Promise.all([
+    supabase.from('traffic_signals_int1').select('*'),
+    supabase.from('traffic_signals_int2').select('*'),
+  ])
 
-  if (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+  if (int1Result.error || int2Result.error) {
+    const errMsg = int1Result.error?.message || int2Result.error?.message
+    return new Response(JSON.stringify({ error: errMsg }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
-  return new Response(JSON.stringify(data), {
+  // Merge results from both tables
+  const allSignals = [...(int1Result.data || []), ...(int2Result.data || [])]
+
+  return new Response(JSON.stringify(allSignals), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 })

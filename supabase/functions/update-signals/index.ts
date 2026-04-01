@@ -5,6 +5,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Route signal ID to correct table
+function getTableForSignal(signalId: string): string {
+  if (signalId.startsWith('SIG-1')) return 'traffic_signals_int1'
+  if (signalId.startsWith('SIG-2')) return 'traffic_signals_int2'
+  // Future intersections: SIG-3xx -> int3, etc.
+  const match = signalId.match(/^SIG-(\d)/)
+  if (match) return `traffic_signals_int${match[1]}`
+  return 'traffic_signals_int1' // fallback
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -23,32 +33,21 @@ Deno.serve(async (req) => {
   )
 
   const body = await req.json()
-  
-  // Generate request ID for tracking
   const requestId = crypto.randomUUID()
-  
-  // Log incoming request for debugging
   console.log(`[update-signals:${requestId}] Received:`, JSON.stringify(body))
-  console.log(`[update-signals:${requestId}] From IP:`, req.headers.get('x-forwarded-for') || 'unknown')
 
-  // Support both flat and nested formats:
-  // Flat:   { "SIG-101": "RED", "SIG-102": "GREEN" }
-  // Nested: { "INT-1": { "SIG-101": "RED" }, "INT-2": { "SIG-201": "GREEN" } }
+  // Support both flat and nested formats
   const flatEntries: [string, string][] = []
 
   for (const [key, value] of Object.entries(body)) {
     if (typeof value === 'string') {
-      // Flat format
       flatEntries.push([key, value])
     } else if (typeof value === 'object' && value !== null) {
-      // Nested format - value is { "SIG-XXX": "STATE" }
       for (const [sigId, state] of Object.entries(value as Record<string, string>)) {
         flatEntries.push([sigId, state])
       }
     }
   }
-  
-  console.log(`[update-signals:${requestId}] Processing entries:`, flatEntries)
 
   if (flatEntries.length === 0) {
     return new Response(JSON.stringify({ success: true, updated: 0 }), {
@@ -58,29 +57,42 @@ Deno.serve(async (req) => {
 
   const normalizedEntries = flatEntries.map(([id, state]) => [id, String(state).toUpperCase()] as const)
 
-  // Update each signal - single table approach with strict isolation
-  const results = await Promise.all(
-    normalizedEntries.map(([id, state], index) => {
-      // Add small offset (10ms per signal) to prevent identical timestamps
-      const updateTime = new Date(Date.now() + index * 10).toISOString()
-      return supabase
-        .from('traffic_signals')
-        .update({ state, updated_at: updateTime })
-        .eq('id', id)
-    })
+  // Group by table to minimize queries and prevent cross-table interference
+  const byTable = new Map<string, { id: string; state: string; index: number }[]>()
+  normalizedEntries.forEach(([id, state], index) => {
+    const table = getTableForSignal(id)
+    if (!byTable.has(table)) byTable.set(table, [])
+    byTable.get(table)!.push({ id, state, index })
+  })
+
+  console.log(`[update-signals:${requestId}] Tables:`, [...byTable.keys()])
+
+  // Update each table independently - no cross-interference
+  const allResults = await Promise.all(
+    [...byTable.entries()].map(([table, signals]) =>
+      Promise.all(
+        signals.map(({ id, state, index }) => {
+          const updateTime = new Date(Date.now() + index * 10).toISOString()
+          return supabase
+            .from(table)
+            .update({ state, updated_at: updateTime })
+            .eq('id', id)
+        })
+      )
+    )
   )
 
-  const errors = results.filter((r: { error: any }) => r.error)
+  const errors = allResults.flat().filter(r => r.error)
 
   if (errors.length > 0) {
-    console.log(`[update-signals:${requestId}] Errors:`, errors.map((e: { error: any }) => e.error))
-    return new Response(JSON.stringify({ error: 'Some updates failed', requestId, details: errors.map((e: { error: any }) => e.error) }), {
+    console.log(`[update-signals:${requestId}] Errors:`, errors.map(e => e.error))
+    return new Response(JSON.stringify({ error: 'Some updates failed', requestId, details: errors.map(e => e.error) }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
-  console.log(`[update-signals:${requestId}] Success: Updated ${flatEntries.length} signals`)
+  console.log(`[update-signals:${requestId}] Success: Updated ${flatEntries.length} signals across ${byTable.size} tables`)
   return new Response(JSON.stringify({ success: true, requestId, updated: flatEntries.length }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
