@@ -188,7 +188,7 @@ export default function TrafficMap({
       rcContainer.appendChild(collapseBtn);
     }
 
-    routingControl.on('routesfound', (event: L.Routing.RoutingResultEvent) => {
+    routingControl.on('routesfound', (event: any) => {
       if (rcContainer) rcContainer.style.display = '';
       const route = event.routes[0];
       activeRouteRef.current = route.coordinates.map((c: L.LatLng) => ({

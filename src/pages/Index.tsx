@@ -73,19 +73,14 @@ const Index = () => {
   }, [signals]);
 
   const fetchIntersectionIPs = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('intersection_ips')
-      .select('intersection, ip');
-
-    if (!error && data) {
-      const map = (data as Array<{ intersection: string; ip: string }>).reduce<Record<string, string>>(
-        (acc, row) => {
-          acc[row.intersection] = row.ip ?? '';
-          return acc;
-        },
-        {},
-      );
-      setIntersectionIPs(map);
+    // Load from localStorage since intersection_ips table doesn't exist
+    try {
+      const stored = localStorage.getItem('intersection_ips');
+      if (stored) {
+        setIntersectionIPs(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn('Could not load intersection IPs', e);
     }
   }, []);
 
