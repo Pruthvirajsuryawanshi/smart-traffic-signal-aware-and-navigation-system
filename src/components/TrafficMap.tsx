@@ -25,6 +25,7 @@ interface TrafficMapProps {
   ambulanceRoute?: AmbulancePoint[];
   signalLocationPickMode?: boolean;
   onSignalLocationPick?: (lat: number, lng: number) => void;
+  trackLive?: boolean;
 }
 
 const SIGNAL_COLORS: Record<string, string> = {
@@ -61,6 +62,7 @@ export default function TrafficMap({
   ambulanceRoute,
   signalLocationPickMode,
   onSignalLocationPick,
+  trackLive,
 }: TrafficMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -467,13 +469,18 @@ export default function TrafficMap({
           offset: [0, -14],
         });
       }
+
+      // Auto-center map on ambulance if trackLive is enabled
+      if (trackLive) {
+        map.setView([ambulancePosition.lat, ambulancePosition.lon], map.getZoom(), { animate: true });
+      }
     } else {
       if (ambulanceMarkerRef.current) {
         map.removeLayer(ambulanceMarkerRef.current);
         ambulanceMarkerRef.current = null;
       }
     }
-  }, [ambulancePosition, ambulanceRoute]);
+  }, [ambulancePosition, ambulanceRoute, trackLive]);
 
   // Search handler
   const handleSearch = useCallback(async () => {

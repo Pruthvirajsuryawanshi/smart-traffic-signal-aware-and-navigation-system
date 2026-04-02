@@ -30,6 +30,7 @@ const Index = () => {
   const [intersectionIPs, setIntersectionIPs] = useState<Record<string, string>>({});
   const [savingIntersectionIPs, setSavingIntersectionIPs] = useState(false);
   const [intersectionIPMessage, setIntersectionIPMessage] = useState<string | null>(null);
+  const [trackLive, setTrackLive] = useState(false);
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') !== 'light';
@@ -39,11 +40,7 @@ const Index = () => {
 
   const ambulance = useAmbulanceSimulation(signals, routeSignals, intersectionIPs);
 
-  const mapSignals = useMemo(() => {
-    // Only use signals from database - never override with fallback
-    // Fallback signals caused interference by showing hardcoded 'RED' states
-    return signals;
-  }, [signals]);
+  const mapSignals = useMemo(() => signals, [signals]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
@@ -73,7 +70,6 @@ const Index = () => {
   }, [signals]);
 
   const fetchIntersectionIPs = useCallback(async () => {
-    // Load from localStorage since intersection_ips table doesn't exist
     try {
       const stored = localStorage.getItem('intersection_ips');
       if (stored) {
@@ -127,7 +123,6 @@ const Index = () => {
 
     setIntersectionIPMessage('Intersection IPs saved.');
     await fetchIntersectionIPs();
-
     setSavingIntersectionIPs(false);
   }, [intersectionIPs, fetchIntersectionIPs]);
 
@@ -138,6 +133,17 @@ const Index = () => {
   const handleRouteDistance = useCallback((d: number) => {
     setRouteDistance(d);
   }, []);
+
+  const handleAmbulanceLogout = useCallback(() => {
+    ambulance.stop();
+    ambulance.reset();
+    setAmbulanceLoggedIn(false);
+  }, [ambulance]);
+
+  const handleClearRoute = useCallback(() => {
+    ambulance.stop();
+    ambulance.reset();
+  }, [ambulance]);
 
   const saveSignalConfigs = useCallback(async (configs: SignalConfig[]) => {
     setSavingSignalConfigs(true);
@@ -151,25 +157,48 @@ const Index = () => {
         return acc;
       }, {});
 
-      // Determine the table for each intersection
-      const getTable = (intId: string) => {
-        const num = intId.match(/INT-(\d+)/i)?.[1];
-        return num ? `traffic_signals_int${num}` as 'traffic_signals_int1' | 'traffic_signals_int2' : null;
+      const getIntNumber = (intId: string) => {
+        const match = intId.match(/INT-(\d+)/i);
+        return match ? Number(match[1]) : null;
       };
 
-      // Build update payload per table via edge function
-      const updatePayload: Record<string, string> = {};
-      for (const config of configs) {
-        updatePayload[config.id] = 'RED'; // preserve state, just update metadata
-      }
+      // Known existing tables
+      const existingIntersections = new Set(signals.map(s => s.intersection).filter(Boolean));
 
-      // Use direct table updates for each intersection
       for (const [intId, intConfigs] of Object.entries(byIntersection)) {
-        const table = getTable(intId);
-        if (!table) continue;
+        const num = getIntNumber(intId);
+        if (!num) continue;
 
-        // Get existing IDs in this table
-        const { data: existing } = await supabase.from(table).select('id');
+        const tableName = `traffic_signals_int${num}` as 'traffic_signals_int1' | 'traffic_signals_int2';
+
+        // If this is a NEW intersection (not in existing DB signals), create table via edge function
+        if (!existingIntersections.has(intId)) {
+          console.log(`[Save] Creating new table for ${intId} via edge function`);
+          const { data, error } = await supabase.functions.invoke('create-intersection-table', {
+            body: {
+              intersectionNumber: num,
+              signals: intConfigs.map(c => ({
+                id: c.id,
+                latitude: c.latitude,
+                longitude: c.longitude,
+                intersection: c.intersection,
+                roadName: c.roadName,
+                type: c.type,
+              })),
+            },
+          });
+
+          if (error) {
+            console.error(`[Save] Failed to create table for ${intId}:`, error);
+            setSavingSignalConfigs(false);
+            return false;
+          }
+          console.log(`[Save] Table created for ${intId}:`, data);
+          continue; // Signals were inserted by the edge function
+        }
+
+        // Existing intersection - do upsert/delete
+        const { data: existing } = await supabase.from(tableName).select('id');
         const existingIds = new Set((existing || []).map((r: any) => r.id));
         const newConfigIds = new Set(intConfigs.map(c => c.id));
 
@@ -177,7 +206,7 @@ const Index = () => {
         const toDelete = Array.from(existingIds).filter(id => !newConfigIds.has(id));
         if (toDelete.length > 0) {
           for (const id of toDelete) {
-            await supabase.from(table).delete().eq('id', id);
+            await supabase.from(tableName).delete().eq('id', id);
           }
         }
 
@@ -193,25 +222,24 @@ const Index = () => {
           updated_at: new Date().toISOString(),
         }));
 
-        const { error } = await supabase.from(table).upsert(payload, { onConflict: 'id' });
+        const { error } = await supabase.from(tableName).upsert(payload, { onConflict: 'id' });
         if (error) {
-          console.error(`Error saving to ${table}:`, error);
+          console.error(`Error saving to ${tableName}:`, error);
           setSavingSignalConfigs(false);
           return false;
         }
       }
 
-      // Handle deleted intersections - check if any existing signals are no longer in configs
-      const existingIntersections = new Set(signals.map(s => s.intersection).filter(Boolean));
+      // Handle deleted intersections
       const newIntersections = new Set(configs.map(c => c.intersection));
       for (const intId of existingIntersections) {
         if (!intId || newIntersections.has(intId)) continue;
-        const table = getTable(intId);
-        if (!table) continue;
-        // Delete all signals from removed intersection
+        const num = getIntNumber(intId);
+        if (!num) continue;
+        const tableName = `traffic_signals_int${num}` as 'traffic_signals_int1' | 'traffic_signals_int2';
         const sigIds = signals.filter(s => s.intersection === intId).map(s => s.id);
         for (const id of sigIds) {
-          await supabase.from(table).delete().eq('id', id);
+          await supabase.from(tableName).delete().eq('id', id);
         }
       }
 
@@ -330,9 +358,11 @@ const Index = () => {
                 onStart={ambulance.start}
                 onStop={ambulance.stop}
                 onReset={ambulance.reset}
+                onLogout={handleAmbulanceLogout}
+                onClearRoute={handleClearRoute}
                 routeLength={ambulance.route.length}
-                esp32IPs={intersectionIPs}
-                onESP32IPChange={handleIntersectionIpChange}
+                trackLive={trackLive}
+                onTrackLiveChange={setTrackLive}
               />
             )}
           </TabsContent>
@@ -365,6 +395,7 @@ const Index = () => {
           ambulanceRoute={ambulance.route}
           signalLocationPickMode={isPickingSignalLocation}
           onSignalLocationPick={handleSignalLocationPick}
+          trackLive={trackLive}
         />
 
         {/* Mobile: floating status pill + theme toggle */}
@@ -454,9 +485,11 @@ const Index = () => {
                 onStart={ambulance.start}
                 onStop={ambulance.stop}
                 onReset={ambulance.reset}
+                onLogout={handleAmbulanceLogout}
+                onClearRoute={handleClearRoute}
                 routeLength={ambulance.route.length}
-                esp32IPs={intersectionIPs}
-                onESP32IPChange={handleIntersectionIpChange}
+                trackLive={trackLive}
+                onTrackLiveChange={setTrackLive}
               />
             )}
           </div>
