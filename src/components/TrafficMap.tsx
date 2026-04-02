@@ -25,6 +25,7 @@ interface TrafficMapProps {
   ambulanceRoute?: AmbulancePoint[];
   signalLocationPickMode?: boolean;
   onSignalLocationPick?: (lat: number, lng: number) => void;
+  trackLive?: boolean;
 }
 
 const SIGNAL_COLORS: Record<string, string> = {
