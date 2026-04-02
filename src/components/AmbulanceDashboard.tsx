@@ -9,9 +9,11 @@ interface AmbulanceDashboardProps {
   onStart: () => void;
   onStop: () => void;
   onReset: () => void;
+  onLogout: () => void;
+  onClearRoute: () => void;
   routeLength: number;
-  esp32IPs: Record<string, string>;
-  onESP32IPChange: (intId: string, ip: string) => void;
+  trackLive: boolean;
+  onTrackLiveChange: (v: boolean) => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -29,9 +31,11 @@ const AmbulanceDashboard = ({
   onStart,
   onStop,
   onReset,
+  onLogout,
+  onClearRoute,
   routeLength,
-  esp32IPs,
-  onESP32IPChange,
+  trackLive,
+  onTrackLiveChange,
 }: AmbulanceDashboardProps) => {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -53,9 +57,18 @@ const AmbulanceDashboard = ({
 
   return (
     <div className="bg-card rounded-lg border border-border p-3 md:p-4 space-y-3">
-      <h2 className="text-sm font-mono font-bold text-foreground tracking-wider uppercase">
-        🚑 Ambulance Simulation
-      </h2>
+      {/* Header with logout */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-mono font-bold text-foreground tracking-wider uppercase">
+          🚑 Ambulance Simulation
+        </h2>
+        <button
+          onClick={onLogout}
+          className="rounded-md border border-border px-2 py-1 text-[10px] font-mono text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+        >
+          Logout
+        </button>
+      </div>
 
       {/* Status */}
       <div className="bg-secondary/50 rounded-md px-3 py-2">
@@ -101,22 +114,18 @@ const AmbulanceDashboard = ({
         </div>
       )}
 
-      {/* ESP32 IP Configuration */}
-      <div className="bg-secondary/50 rounded-md px-3 py-2 space-y-1.5">
-        <span className="text-[10px] font-mono text-muted-foreground block">ESP32 IPs (optional)</span>
-        {(Object.keys(esp32IPs).length > 0 ? Object.keys(esp32IPs) : ['INT-1', 'INT-2']).map((intId) => (
-          <div key={intId} className="flex items-center gap-2">
-            <span className="text-[10px] font-mono text-foreground w-10">{intId}:</span>
-            <input
-              type="text"
-              placeholder="e.g. 192.168.1.100"
-              value={esp32IPs[intId] || ''}
-              onChange={(e) => onESP32IPChange(intId, e.target.value)}
-              disabled={status.running}
-              className="flex-1 px-2 py-1 rounded text-[10px] font-mono bg-muted text-foreground border border-border"
-            />
-          </div>
-        ))}
+      {/* Track Live toggle */}
+      <div className="flex items-center justify-between bg-secondary/50 rounded-md px-3 py-2">
+        <div>
+          <span className="text-[10px] font-mono text-muted-foreground block">Track Live</span>
+          <span className="text-[9px] font-mono text-muted-foreground">Auto-center map on ambulance</span>
+        </div>
+        <button
+          onClick={() => onTrackLiveChange(!trackLive)}
+          className={`relative w-10 h-5 rounded-full transition-colors ${trackLive ? 'bg-signal-green' : 'bg-muted'}`}
+        >
+          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-background shadow transition-transform ${trackLive ? 'translate-x-5' : 'translate-x-0.5'}`} />
+        </button>
       </div>
 
       <div>
@@ -176,6 +185,13 @@ const AmbulanceDashboard = ({
           className="px-3 py-2 rounded-md text-xs font-mono font-semibold bg-secondary text-secondary-foreground hover:bg-muted transition-colors disabled:opacity-50"
         >
           ↺ Reset
+        </button>
+        <button
+          onClick={onClearRoute}
+          disabled={status.running || routeLength === 0}
+          className="px-3 py-2 rounded-md text-xs font-mono font-semibold bg-secondary text-secondary-foreground hover:bg-muted transition-colors disabled:opacity-50"
+        >
+          🗑 Clear
         </button>
       </div>
 
