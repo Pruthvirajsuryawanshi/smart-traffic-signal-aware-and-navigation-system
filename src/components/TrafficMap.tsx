@@ -62,6 +62,7 @@ export default function TrafficMap({
   ambulanceRoute,
   signalLocationPickMode,
   onSignalLocationPick,
+  trackLive,
 }: TrafficMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
