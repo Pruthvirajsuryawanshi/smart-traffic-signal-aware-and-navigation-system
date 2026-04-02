@@ -40,7 +40,7 @@ export function useAmbulanceSimulation(
     statusText: 'Idle',
     overriddenSignals: new Set(),
   });
-  const [speed, setSpeed] = useState(1.5);
+  const [speed, setSpeed] = useState(35); // Speed in km/h
 
   const esp32IPs = Object.keys(externalEsp32IPs).length > 0
     ? externalEsp32IPs
@@ -50,6 +50,14 @@ export function useAmbulanceSimulation(
       };
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const animationRef = useRef<{
+    startTime: number;
+    duration: number;
+    from: AmbulancePoint;
+    to: AmbulancePoint;
+    fromIndex: number;
+  } | null>(null);
   const indexRef = useRef(0);
   const activeOverrideRef = useRef<string | null>(null);
   const lastESP32CommandRef = useRef<Record<string, string>>({});
@@ -367,18 +375,54 @@ export function useAmbulanceSimulation(
     [signals, overrideSignalGreen, restoreSignal, getRouteDistanceAtCurrentIndex, routeSignals]
   );
 
-  const start = useCallback(() => {
-    if (route.length === 0) return;
-    if (intervalRef.current) clearInterval(intervalRef.current);
-
-    setStatus((s) => ({ ...s, running: true, statusText: 'Simulation running' }));
-
-    intervalRef.current = setInterval(() => {
-      const idx = indexRef.current;
-      if (idx >= route.length) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        intervalRef.current = null;
-        // Restore any active override on completion
+  // Smooth animation using requestAnimationFrame
+  const animate = useCallback(() => {
+    if (!animationRef.current) return;
+    
+    const { startTime, duration, from, to, fromIndex } = animationRef.current;
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    
+    // Linear interpolation between points
+    const currentLat = from.lat + (to.lat - from.lat) * progress;
+    const currentLon = from.lon + (to.lon - from.lon) * progress;
+    const currentPos = { lat: currentLat, lon: currentLon };
+    
+    // Check proximity to signals during animation
+    const nearId = checkProximity(currentPos);
+    
+    let statusText = 'En route';
+    if (nearId) {
+      const sig = signals.find((s) => s.id === nearId);
+      if (sig) {
+        const dist = haversineMeters(
+          { lat: currentPos.lat, lng: currentPos.lon },
+          { lat: sig.latitude, lng: sig.longitude }
+        );
+        if (dist < 20) statusText = `Crossing ${nearId}`;
+        else statusText = `Approaching ${nearId} (${Math.round(dist)}m)`;
+      }
+    }
+    
+    // Update position (smooth interpolation)
+    setStatus((s) => ({
+      ...s,
+      position: currentPos,
+      currentIndex: fromIndex + Math.floor(progress),
+      nearbySignalId: nearId,
+      statusText,
+      overriddenSignals: activeOverrideRef.current ? new Set([activeOverrideRef.current]) : new Set(),
+    }));
+    
+    if (progress < 1) {
+      // Continue animation
+      rafRef.current = requestAnimationFrame(animate);
+    } else {
+      // Segment complete, move to next
+      indexRef.current = fromIndex + 1;
+      
+      if (indexRef.current >= route.length) {
+        // Route complete
         if (activeOverrideRef.current) {
           restoreSignal(activeOverrideRef.current);
         }
@@ -390,40 +434,69 @@ export function useAmbulanceSimulation(
         }));
         return;
       }
+      
+      // Start next segment
+      const nextFrom = route[indexRef.current];
+      const nextTo = route[indexRef.current + 1] || nextFrom;
+      const segmentDistance = haversineMeters(
+        { lat: nextFrom.lat, lng: nextFrom.lon },
+        { lat: nextTo.lat, lng: nextTo.lon }
+      );
+      const segmentDuration = (segmentDistance / 1000 / speed) * 3600 * 1000;
+      
+      animationRef.current = {
+        startTime: Date.now(),
+        duration: Math.max(100, Math.min(5000, segmentDuration)),
+        from: nextFrom,
+        to: nextTo,
+        fromIndex: indexRef.current,
+      };
+      
+      rafRef.current = requestAnimationFrame(animate);
+    }
+  }, [route, speed, checkProximity, restoreSignal, signals]);
 
-      const pos = route[idx];
-      const nearId = checkProximity(pos);
+  const start = useCallback(() => {
+    if (route.length === 0) return;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
-      let statusText = 'En route';
-      if (nearId) {
-        const sig = signals.find((s) => s.id === nearId);
-        if (sig) {
-          const dist = haversineMeters(
-            { lat: pos.lat, lng: pos.lon },
-            { lat: sig.latitude, lng: sig.longitude }
-          );
-          if (dist < 20) statusText = `Crossing ${nearId}`;
-          else statusText = `Approaching ${nearId} (${Math.round(dist)}m)`;
-        }
-      }
-
-      indexRef.current = idx + 1;
-      setStatus((s) => ({
-        ...s,
-        position: pos,
-        currentIndex: idx + 1,
-        nearbySignalId: nearId,
-        statusText,
-        overriddenSignals: activeOverrideRef.current ? new Set([activeOverrideRef.current]) : new Set(),
-      }));
-    }, speed * 1000);
-  }, [route, speed, checkProximity, restoreSignal, signals, routeSignals]);
+    setStatus((s) => ({ ...s, running: true, statusText: 'Simulation running' }));
+    
+    // Start from current position or beginning
+    const startIndex = indexRef.current || 0;
+    if (startIndex >= route.length - 1) {
+      indexRef.current = 0;
+    }
+    
+    const from = route[indexRef.current];
+    const to = route[indexRef.current + 1] || from;
+    const segmentDistance = haversineMeters(
+      { lat: from.lat, lng: from.lon },
+      { lat: to.lat, lng: to.lon }
+    );
+    const segmentDuration = (segmentDistance / 1000 / speed) * 3600 * 1000;
+    
+    animationRef.current = {
+      startTime: Date.now(),
+      duration: Math.max(100, Math.min(5000, segmentDuration)),
+      from,
+      to,
+      fromIndex: indexRef.current,
+    };
+    
+    rafRef.current = requestAnimationFrame(animate);
+  }, [route, speed, animate]);
 
   const stop = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+      clearTimeout(intervalRef.current);
       intervalRef.current = null;
     }
+    animationRef.current = null;
     if (activeOverrideRef.current) {
       restoreSignal(activeOverrideRef.current);
     }
@@ -449,9 +522,32 @@ export function useAmbulanceSimulation(
     }));
   }, [stop, route]);
 
+  const clearRoute = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    stop();
+    setRoute([]);
+    indexRef.current = 0;
+    activeOverrideRef.current = null;
+    lastESP32CommandRef.current = {};
+    animationRef.current = null;
+    setStatus({
+      position: null,
+      running: false,
+      currentIndex: 0,
+      totalPoints: 0,
+      nearbySignalId: null,
+      statusText: 'Idle',
+      overriddenSignals: new Set(),
+    });
+  }, [stop]);
+
   useEffect(() => {
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (intervalRef.current) clearTimeout(intervalRef.current);
     };
   }, []);
 
@@ -464,6 +560,7 @@ export function useAmbulanceSimulation(
     start,
     stop,
     reset,
+    clearRoute,
     esp32IPs,
   };
 }

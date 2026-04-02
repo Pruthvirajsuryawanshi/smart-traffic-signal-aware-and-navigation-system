@@ -141,8 +141,10 @@ const Index = () => {
   }, [ambulance]);
 
   const handleClearRoute = useCallback(() => {
-    ambulance.stop();
-    ambulance.reset();
+    ambulance.clearRoute();
+    // Clear the route signals from the map
+    setRouteSignals([]);
+    setRouteDistance(0);
   }, [ambulance]);
 
   const saveSignalConfigs = useCallback(async (configs: SignalConfig[]) => {

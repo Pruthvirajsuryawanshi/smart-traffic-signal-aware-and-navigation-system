@@ -41,7 +41,17 @@ const AmbulanceDashboard = ({
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) onLoadCSV(file);
+    if (file) {
+      // Clear existing route before loading new one
+      if (routeLength > 0) {
+        onClearRoute();
+      }
+      onLoadCSV(file);
+      // Reset file input so same file can be selected again
+      if (fileRef.current) {
+        fileRef.current.value = '';
+      }
+    }
   };
 
   const statusColor =
@@ -147,18 +157,18 @@ const AmbulanceDashboard = ({
 
       {/* Speed Control */}
       <div className="flex items-center gap-2 bg-secondary/50 rounded-md px-3 py-2">
-        <span className="text-[10px] font-mono text-muted-foreground">Delay:</span>
+        <span className="text-[10px] font-mono text-muted-foreground">Speed:</span>
         <input
           type="range"
-          min={0.3}
-          max={5}
-          step={0.1}
+          min={10}
+          max={120}
+          step={5}
           value={speed}
           onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
           className="flex-1 accent-primary"
           disabled={status.running}
         />
-        <span className="text-[10px] font-mono text-foreground w-10 text-right">{speed.toFixed(1)}s</span>
+        <span className="text-[10px] font-mono text-foreground w-12 text-right">{speed.toFixed(0)} km/h</span>
       </div>
 
       {/* Controls */}
