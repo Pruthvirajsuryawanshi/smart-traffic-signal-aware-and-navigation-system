@@ -4,22 +4,49 @@ import { supabase } from '@/integrations/supabase/client';
 import type { TrafficSignal, SignalState, SignalRuntime } from '@/types/signal';
 import { SIGNAL_METADATA, DEFAULT_SETTINGS } from '@/types/signal';
 
-// Intersection table config - add new intersections here
-const INTERSECTION_TABLES = [
-  'traffic_signals_int1',
-  'traffic_signals_int2',
-] as const;
+// Known intersection tables - dynamically extended when new ones are discovered
+const KNOWN_TABLES = ['traffic_signals_int1', 'traffic_signals_int2'] as const;
 
 export function useSignals() {
   const [signals, setSignals] = useState<TrafficSignal[]>([]);
   const [loading, setLoading] = useState(true);
   const runtimesRef = useRef<Map<string, SignalRuntime>>(new Map());
+  const extraTablesRef = useRef<string[]>([]);
+
+  const discoverTables = useCallback(async () => {
+    // Try to discover additional intersection tables (INT-3, INT-4, etc.)
+    // by attempting to query them. Cache discoveries.
+    const maxCheck = 10;
+    const newTables: string[] = [];
+    for (let i = 3; i <= maxCheck; i++) {
+      const tableName = `traffic_signals_int${i}`;
+      if (extraTablesRef.current.includes(tableName)) {
+        newTables.push(tableName);
+        continue;
+      }
+      try {
+        const { data, error } = await supabase.from(tableName as any).select('id').limit(1);
+        if (!error && data) {
+          newTables.push(tableName);
+        } else {
+          break; // Stop at first missing table
+        }
+      } catch {
+        break;
+      }
+    }
+    extraTablesRef.current = newTables;
+    return newTables;
+  }, []);
 
   const fetchSignals = useCallback(async () => {
-    // Fetch from each intersection table independently - no interference
+    const extraTables = await discoverTables();
+    const allTableNames = [...KNOWN_TABLES, ...extraTables];
+
+    // Fetch from each intersection table independently
     const results = await Promise.all(
-      INTERSECTION_TABLES.map(table =>
-        supabase.from(table).select('*').order('id', { ascending: true })
+      allTableNames.map(table =>
+        supabase.from(table as any).select('*').order('id', { ascending: true })
       )
     );
 
@@ -60,7 +87,7 @@ export function useSignals() {
     }
 
     setLoading(false);
-  }, []);
+  }, [discoverTables]);
 
   useEffect(() => {
     fetchSignals();
@@ -75,7 +102,11 @@ export function useSignals() {
     await fetchSignals();
   }, [fetchSignals]);
 
-  const refreshSignals = useCallback(fetchSignals, [fetchSignals]);
+  const refreshSignals = useCallback(async () => {
+    // Force re-discovery of tables on next fetch
+    extraTablesRef.current = [];
+    await fetchSignals();
+  }, [fetchSignals]);
 
   const getRuntime = useCallback((id: string) => {
     return runtimesRef.current.get(id);
