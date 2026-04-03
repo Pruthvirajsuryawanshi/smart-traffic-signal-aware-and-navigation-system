@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react';
 import type { RouteSignalInfo } from '@/types/signal';
 import type { TrafficSignal } from '@/types/signal';
-import { formatCountdown, getCountdown } from '@/lib/countdown';
+import { formatCountdown, getCountdown, getSpeedPrediction } from '@/lib/countdown';
 
 interface RouteSignalPanelProps {
   routeSignals: RouteSignalInfo[];
@@ -33,6 +34,14 @@ function formatDistance(meters: number): string {
 }
 
 export default function RouteSignalPanel({ routeSignals, routeDistance, speed, allSignals }: RouteSignalPanelProps) {
+  const [, setTick] = useState(0);
+
+  // Re-render every second for live countdowns
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="bg-card rounded-lg border border-border p-3 md:p-4">
       <h2 className="text-sm font-mono font-bold text-foreground tracking-wider uppercase mb-3">
@@ -66,24 +75,27 @@ export default function RouteSignalPanel({ routeSignals, routeDistance, speed, a
           {routeSignals.map((info, idx) => {
             const countdown = getCountdown(info.signal.state, info.signal.updated_at, info.signal.id, allSignals);
             const countdownText = formatCountdown(info.signal.state, info.signal.updated_at, info.signal.id, allSignals);
+            const prediction = speed
+              ? getSpeedPrediction(info.distanceFromStart, info.signal.state, info.signal.updated_at, info.signal.id, allSignals, speed)
+              : null;
 
             return (
               <div
                 key={info.signal.id}
-                className={`rounded-lg px-3 py-2.5 border ${STATE_BG[info.state]}`}
+                className={`rounded-lg px-3 py-2.5 border ${STATE_BG[countdown.currentState]}`}
               >
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-xs font-mono font-bold text-foreground">
                     {idx + 1}.
                   </span>
-                  <span className={`text-sm font-mono font-bold ${STATE_COLORS[info.state]}`}>
+                  <span className={`text-sm font-mono font-bold ${STATE_COLORS[countdown.currentState]}`}>
                     ●
                   </span>
                   <span className="font-mono text-xs font-semibold text-foreground">
                     {info.signal.id}
                   </span>
-                  <span className={`text-xs font-mono font-bold ml-auto ${STATE_COLORS[info.state]}`}>
-                    {info.state}
+                  <span className={`text-xs font-mono font-bold ml-auto ${STATE_COLORS[countdown.currentState]}`}>
+                    {countdown.currentState}
                   </span>
                 </div>
 
@@ -97,6 +109,21 @@ export default function RouteSignalPanel({ routeSignals, routeDistance, speed, a
                     {countdownText}
                   </span>
                 </div>
+
+                {/* Speed Prediction */}
+                {prediction && (
+                  <div className={`flex items-center gap-1.5 mb-2 px-2 py-1.5 rounded-md border ${
+                    prediction.canCross
+                      ? 'bg-signal-green/5 border-signal-green/20'
+                      : 'bg-signal-yellow/5 border-signal-yellow/20'
+                  }`}>
+                    <span className={`text-[10px] font-mono font-semibold ${
+                      prediction.canCross ? 'text-signal-green' : 'text-signal-yellow'
+                    }`}>
+                      {prediction.text}
+                    </span>
+                  </div>
+                )}
 
                 {/* Stats grid */}
                 <div className="grid grid-cols-3 gap-2 text-[10px] font-mono">
