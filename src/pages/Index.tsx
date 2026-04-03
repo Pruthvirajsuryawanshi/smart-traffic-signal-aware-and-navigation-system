@@ -335,6 +335,7 @@ const Index = () => {
               routeDistance={routeDistance}
               speed={speed}
               allSignals={signals}
+              isAmbulance={ambulanceLoggedIn}
             />
           </TabsContent>
 
@@ -398,6 +399,7 @@ const Index = () => {
           signalLocationPickMode={isPickingSignalLocation}
           onSignalLocationPick={handleSignalLocationPick}
           trackLive={trackLive}
+          isAmbulance={ambulanceLoggedIn}
         />
 
         {/* Mobile: floating status pill + theme toggle */}
@@ -467,6 +469,7 @@ const Index = () => {
                 routeDistance={routeDistance}
                 speed={speed}
                 allSignals={signals}
+                isAmbulance={ambulanceLoggedIn}
               />
             ) : mobileTab === 'signals' ? (
               <AdminPanel

@@ -8,6 +8,7 @@ interface RouteSignalPanelProps {
   routeDistance: number;
   speed?: number;
   allSignals: TrafficSignal[];
+  isAmbulance?: boolean;
 }
 
 const STATE_COLORS: Record<string, string> = {
@@ -33,7 +34,7 @@ function formatDistance(meters: number): string {
   return `${meters.toFixed(0)} m`;
 }
 
-export default function RouteSignalPanel({ routeSignals, routeDistance, speed, allSignals }: RouteSignalPanelProps) {
+export default function RouteSignalPanel({ routeSignals, routeDistance, speed, allSignals, isAmbulance = false }: RouteSignalPanelProps) {
   const [, setTick] = useState(0);
 
   // Re-render every second for live countdowns
@@ -75,7 +76,7 @@ export default function RouteSignalPanel({ routeSignals, routeDistance, speed, a
           {routeSignals.map((info, idx) => {
             const countdown = getCountdown(info.signal.state, info.signal.updated_at, info.signal.id, allSignals);
             const countdownText = formatCountdown(info.signal.state, info.signal.updated_at, info.signal.id, allSignals);
-            const prediction = speed
+            const prediction = (speed && !isAmbulance)
               ? getSpeedPrediction(info.distanceFromStart, info.signal.state, info.signal.updated_at, info.signal.id, allSignals, speed)
               : null;
 

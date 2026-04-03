@@ -26,6 +26,7 @@ interface TrafficMapProps {
   signalLocationPickMode?: boolean;
   onSignalLocationPick?: (lat: number, lng: number) => void;
   trackLive?: boolean;
+  isAmbulance?: boolean;
 }
 
 const SIGNAL_COLORS: Record<string, string> = {
@@ -63,6 +64,7 @@ export default function TrafficMap({
   signalLocationPickMode,
   onSignalLocationPick,
   trackLive,
+  isAmbulance = false,
 }: TrafficMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -412,9 +414,9 @@ export default function TrafficMap({
       const countdown = getCountdown(currentState, signal.updated_at, signal.id, signals);
       const countdownText = formatCountdown(currentState, signal.updated_at, signal.id, signals);
       
-      // Speed prediction for route signals
+      // Speed prediction for route signals (user mode only)
       let predictionHtml = '';
-      if (onRoute) {
+      if (onRoute && !isAmbulance) {
         const routeInfo = (window as any).__routeSignalInfoMap?.get(signal.id) ?? null;
         if (routeInfo) {
           const prediction = getSpeedPrediction(routeInfo.distanceFromStart, currentState, signal.updated_at, signal.id, signals, speed);
