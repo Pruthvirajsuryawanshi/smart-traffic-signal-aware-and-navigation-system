@@ -5,7 +5,7 @@ import 'leaflet-routing-machine';
 import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
 import type { TrafficSignal, RouteSignalInfo, SignalRuntime } from '@/types/signal';
 import { DEFAULT_SETTINGS, SIGNAL_METADATA } from '@/types/signal';
-import { formatCountdown } from '@/lib/countdown';
+import { formatCountdown, getCountdown, getSpeedPrediction } from '@/lib/countdown';
 import type { AmbulancePoint } from '@/hooks/useAmbulanceSimulation';
 import {
   haversineMeters,
