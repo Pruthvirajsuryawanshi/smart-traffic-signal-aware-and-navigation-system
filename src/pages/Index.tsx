@@ -469,6 +469,7 @@ const Index = () => {
                 routeDistance={routeDistance}
                 speed={speed}
                 allSignals={signals}
+                isAmbulance={ambulanceLoggedIn}
               />
             ) : mobileTab === 'signals' ? (
               <AdminPanel
