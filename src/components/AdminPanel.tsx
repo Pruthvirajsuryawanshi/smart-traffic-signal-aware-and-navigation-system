@@ -30,6 +30,12 @@ export default function AdminPanel({
   onSpeedChange,
   getRuntime,
 }: AdminPanelProps) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const grouped = signals.reduce<Record<string, TrafficSignal[]>>((acc, signal) => {
     const intId = signal.intersection ?? (SIGNAL_METADATA[signal.id]?.intersection || 'Unknown');
     if (!acc[intId]) acc[intId] = [];
