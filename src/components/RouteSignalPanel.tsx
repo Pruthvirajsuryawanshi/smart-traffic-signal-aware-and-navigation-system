@@ -34,7 +34,7 @@ function formatDistance(meters: number): string {
   return `${meters.toFixed(0)} m`;
 }
 
-export default function RouteSignalPanel({ routeSignals, routeDistance, speed, allSignals }: RouteSignalPanelProps) {
+export default function RouteSignalPanel({ routeSignals, routeDistance, speed, allSignals, isAmbulance = false }: RouteSignalPanelProps) {
   const [, setTick] = useState(0);
 
   // Re-render every second for live countdowns
