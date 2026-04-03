@@ -8,6 +8,7 @@ interface RouteSignalPanelProps {
   routeDistance: number;
   speed?: number;
   allSignals: TrafficSignal[];
+  isAmbulance?: boolean;
 }
 
 const STATE_COLORS: Record<string, string> = {
