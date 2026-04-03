@@ -26,6 +26,7 @@ interface TrafficMapProps {
   signalLocationPickMode?: boolean;
   onSignalLocationPick?: (lat: number, lng: number) => void;
   trackLive?: boolean;
+  isAmbulance?: boolean;
 }
 
 const SIGNAL_COLORS: Record<string, string> = {

@@ -76,7 +76,7 @@ export default function RouteSignalPanel({ routeSignals, routeDistance, speed, a
           {routeSignals.map((info, idx) => {
             const countdown = getCountdown(info.signal.state, info.signal.updated_at, info.signal.id, allSignals);
             const countdownText = formatCountdown(info.signal.state, info.signal.updated_at, info.signal.id, allSignals);
-            const prediction = speed
+            const prediction = (speed && !isAmbulance)
               ? getSpeedPrediction(info.distanceFromStart, info.signal.state, info.signal.updated_at, info.signal.id, allSignals, speed)
               : null;
 
