@@ -398,6 +398,7 @@ const Index = () => {
           signalLocationPickMode={isPickingSignalLocation}
           onSignalLocationPick={handleSignalLocationPick}
           trackLive={trackLive}
+          isAmbulance={ambulanceLoggedIn}
         />
 
         {/* Mobile: floating status pill + theme toggle */}
