@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { TrafficSignal, SignalState, SignalRuntime } from '@/types/signal';
 import { SIGNAL_METADATA } from '@/types/signal';
 import { formatCountdown, getCountdown } from '@/lib/countdown';
