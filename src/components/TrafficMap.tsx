@@ -403,13 +403,27 @@ export default function TrafficMap({
       const meta = SIGNAL_METADATA[signal.id];
 
       const existing = markersRef.current.get(signal.id);
+      const countdown = getCountdown(currentState, signal.updated_at, signal.id, signals);
       const countdownText = formatCountdown(currentState, signal.updated_at, signal.id, signals);
+      
+      // Speed prediction for route signals
+      let predictionHtml = '';
+      if (onRoute) {
+        const routeInfo = routeSignalIds.has(signal.id) ? routeSignalInfoMap?.get(signal.id) : null;
+        if (routeInfo) {
+          const prediction = getSpeedPrediction(routeInfo.distanceFromStart, currentState, signal.updated_at, signal.id, signals, speed);
+          const predColor = prediction.canCross ? '#38a169' : '#d69e2e';
+          predictionHtml = `<div style="font-size: 10px; color: ${predColor}; margin-top: 4px; padding: 3px 6px; background: ${predColor}15; border-radius: 4px;">${prediction.text}</div>`;
+        }
+      }
+      
       const popupContent = `
-        <div style="font-family: 'JetBrains Mono', monospace; background: #1a1f2e; color: #e2e8f0; padding: 8px; border-radius: 6px; min-width: 160px;">
+        <div style="font-family: 'JetBrains Mono', monospace; background: #1a1f2e; color: #e2e8f0; padding: 8px; border-radius: 6px; min-width: 180px;">
           <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">${signal.id}</div>
           <div style="font-size: 12px; color: #a0aec0; margin-bottom: 4px;">${signal.roadName || meta?.roadName || ''}</div>
-          <div style="color: ${SIGNAL_COLORS[currentState]}; font-weight: 600;">● ${currentState}</div>
+          <div style="color: ${SIGNAL_COLORS[countdown.currentState]}; font-weight: 600;">● ${countdown.currentState}</div>
           <div style="font-size: 12px; font-weight: 700; color: #e2e8f0; margin-top: 4px;">${countdownText}</div>
+          ${predictionHtml}
         </div>
       `;
 
