@@ -415,7 +415,7 @@ export default function TrafficMap({
       // Speed prediction for route signals
       let predictionHtml = '';
       if (onRoute) {
-        const routeInfo = routeSignalIds.has(signal.id) ? routeSignalInfoMap?.get(signal.id) : null;
+        const routeInfo = (window as any).__routeSignalInfoMap?.get(signal.id) ?? null;
         if (routeInfo) {
           const prediction = getSpeedPrediction(routeInfo.distanceFromStart, currentState, signal.updated_at, signal.id, signals, speed);
           const predColor = prediction.canCross ? '#38a169' : '#d69e2e';
