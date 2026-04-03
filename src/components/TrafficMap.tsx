@@ -372,6 +372,12 @@ export default function TrafficMap({
       });
 
       nearbySignals.sort((a, b) => a.distanceFromStart - b.distanceFromStart);
+      
+      // Build a map for popup predictions
+      const routeInfoMap = new Map<string, RouteSignalInfo>();
+      nearbySignals.forEach(s => routeInfoMap.set(s.signal.id, s));
+      (window as any).__routeSignalInfoMap = routeInfoMap;
+      
       onRouteSignals?.(nearbySignals);
 
       if (ambulanceRoute && ambulanceRoute.length > 1) {
