@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSignals } from '@/hooks/useSignals';
 import { useAmbulanceSimulation } from '@/hooks/useAmbulanceSimulation';
 import TrafficMap from '@/components/TrafficMap';
-import AdminPanel from '@/components/AdminPanel';
 import RouteSignalPanel from '@/components/RouteSignalPanel';
 import AmbulanceDashboard from '@/components/AmbulanceDashboard';
 import AmbulanceLogin from '@/components/AmbulanceLogin';
