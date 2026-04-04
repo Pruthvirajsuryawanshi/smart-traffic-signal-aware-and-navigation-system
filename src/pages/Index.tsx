@@ -447,17 +447,17 @@ const Index = () => {
           </div>
 
           <div className="flex gap-1 px-4 pb-2">
-            {(['route', 'signals', 'ambulance'] as const).map((tab) => (
+            {(['route', 'ambulance'] as const).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setMobileTab(tab)}
+                onClick={() => setMobileTab(tab as any)}
                 className={`flex-1 py-1.5 rounded-md text-xs font-mono font-semibold transition-all ${
                   mobileTab === tab
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-secondary text-muted-foreground'
                 }`}
               >
-                {tab === 'route' ? 'Route' : tab === 'signals' ? 'Signals' : '🚑'}
+                {tab === 'route' ? 'Route' : '🚑'}
               </button>
             ))}
           </div>
