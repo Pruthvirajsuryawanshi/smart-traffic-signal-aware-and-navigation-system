@@ -334,9 +334,6 @@ const Index = () => {
             <TabsTrigger value="route" className="flex-1 text-xs font-mono">
               Route
             </TabsTrigger>
-            <TabsTrigger value="signals" className="flex-1 text-xs font-mono">
-              Signals
-            </TabsTrigger>
             <TabsTrigger value="ambulance" className="flex-1 text-xs font-mono">
               🚑
             </TabsTrigger>
@@ -349,16 +346,6 @@ const Index = () => {
               speed={speed}
               allSignals={signals}
               isAmbulance={ambulanceLoggedIn}
-            />
-          </TabsContent>
-
-          <TabsContent value="signals" className="flex-1 overflow-y-auto pb-3">
-            <AdminPanel
-              signals={signals}
-              onUpdate={updateSignal}
-              speed={speed}
-              onSpeedChange={setSpeed}
-              getRuntime={getRuntime}
             />
           </TabsContent>
 
