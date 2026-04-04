@@ -297,6 +297,19 @@ const Index = () => {
           onSaveIntersectionIPs={saveIntersectionIPs}
           savingIntersectionIPs={savingIntersectionIPs}
           intersectionIPMessage={intersectionIPMessage}
+          signals={signals}
+          onUpdateSignal={updateSignal}
+          speed={speed}
+          onSpeedChange={setSpeed}
+          getRuntime={getRuntime}
+          onEmergencyTrigger={(signalId) => {
+            setEmergencyActiveSignal(signalId);
+            updateSignal(signalId, 'GREEN');
+          }}
+          onEmergencyClear={() => {
+            setEmergencyActiveSignal(null);
+          }}
+          emergencyActiveSignal={emergencyActiveSignal}
         />
 
         {/* Status bar */}
