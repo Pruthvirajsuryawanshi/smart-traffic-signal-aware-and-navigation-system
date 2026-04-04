@@ -29,6 +29,7 @@ const Index = () => {
   const [intersectionIPs, setIntersectionIPs] = useState<Record<string, string>>({});
   const [savingIntersectionIPs, setSavingIntersectionIPs] = useState(false);
   const [intersectionIPMessage, setIntersectionIPMessage] = useState<string | null>(null);
+  const [emergencyActiveSignal, setEmergencyActiveSignal] = useState<string | null>(null);
   const [trackLive, setTrackLive] = useState(false);
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
