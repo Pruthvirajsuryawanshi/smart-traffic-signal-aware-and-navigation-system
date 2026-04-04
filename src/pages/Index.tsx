@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSignals } from '@/hooks/useSignals';
 import { useAmbulanceSimulation } from '@/hooks/useAmbulanceSimulation';
 import TrafficMap from '@/components/TrafficMap';
-import AdminPanel from '@/components/AdminPanel';
 import RouteSignalPanel from '@/components/RouteSignalPanel';
 import AmbulanceDashboard from '@/components/AmbulanceDashboard';
 import AmbulanceLogin from '@/components/AmbulanceLogin';
@@ -30,6 +29,7 @@ const Index = () => {
   const [intersectionIPs, setIntersectionIPs] = useState<Record<string, string>>({});
   const [savingIntersectionIPs, setSavingIntersectionIPs] = useState(false);
   const [intersectionIPMessage, setIntersectionIPMessage] = useState<string | null>(null);
+  const [emergencyActiveSignal, setEmergencyActiveSignal] = useState<string | null>(null);
   const [trackLive, setTrackLive] = useState(false);
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -297,6 +297,19 @@ const Index = () => {
           onSaveIntersectionIPs={saveIntersectionIPs}
           savingIntersectionIPs={savingIntersectionIPs}
           intersectionIPMessage={intersectionIPMessage}
+          signals={signals}
+          onUpdateSignal={updateSignal}
+          speed={speed}
+          onSpeedChange={setSpeed}
+          getRuntime={getRuntime}
+          onEmergencyTrigger={(signalId) => {
+            setEmergencyActiveSignal(signalId);
+            updateSignal(signalId, 'GREEN');
+          }}
+          onEmergencyClear={() => {
+            setEmergencyActiveSignal(null);
+          }}
+          emergencyActiveSignal={emergencyActiveSignal}
         />
 
         {/* Status bar */}
@@ -321,9 +334,6 @@ const Index = () => {
             <TabsTrigger value="route" className="flex-1 text-xs font-mono">
               Route
             </TabsTrigger>
-            <TabsTrigger value="signals" className="flex-1 text-xs font-mono">
-              Signals
-            </TabsTrigger>
             <TabsTrigger value="ambulance" className="flex-1 text-xs font-mono">
               🚑
             </TabsTrigger>
@@ -336,16 +346,6 @@ const Index = () => {
               speed={speed}
               allSignals={signals}
               isAmbulance={ambulanceLoggedIn}
-            />
-          </TabsContent>
-
-          <TabsContent value="signals" className="flex-1 overflow-y-auto pb-3">
-            <AdminPanel
-              signals={signals}
-              onUpdate={updateSignal}
-              speed={speed}
-              onSpeedChange={setSpeed}
-              getRuntime={getRuntime}
             />
           </TabsContent>
 
@@ -447,17 +447,17 @@ const Index = () => {
           </div>
 
           <div className="flex gap-1 px-4 pb-2">
-            {(['route', 'signals', 'ambulance'] as const).map((tab) => (
+            {(['route', 'ambulance'] as const).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setMobileTab(tab)}
+                onClick={() => setMobileTab(tab as any)}
                 className={`flex-1 py-1.5 rounded-md text-xs font-mono font-semibold transition-all ${
                   mobileTab === tab
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-secondary text-muted-foreground'
                 }`}
               >
-                {tab === 'route' ? 'Route' : tab === 'signals' ? 'Signals' : '🚑'}
+                {tab === 'route' ? 'Route' : '🚑'}
               </button>
             ))}
           </div>
@@ -470,14 +470,6 @@ const Index = () => {
                 speed={speed}
                 allSignals={signals}
                 isAmbulance={ambulanceLoggedIn}
-              />
-            ) : mobileTab === 'signals' ? (
-              <AdminPanel
-                signals={signals}
-                onUpdate={updateSignal}
-                speed={speed}
-                onSpeedChange={setSpeed}
-                getRuntime={getRuntime}
               />
             ) : !ambulanceLoggedIn ? (
               <AmbulanceLogin onLogin={() => setAmbulanceLoggedIn(true)} />

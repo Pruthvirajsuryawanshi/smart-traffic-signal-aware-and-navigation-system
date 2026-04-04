@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import AdminAuthCard from './AdminAuthCard';
+import AdminPanel from './AdminPanel';
+import type { TrafficSignal, SignalState, SignalRuntime } from '@/types/signal';
 
 export type SignalConfig = {
   id: string;
@@ -139,6 +141,16 @@ interface SettingsPanelProps {
   onSaveIntersectionIPs: () => Promise<void>;
   savingIntersectionIPs: boolean;
   intersectionIPMessage?: string | null;
+  // Signal monitoring props
+  signals: TrafficSignal[];
+  onUpdateSignal: (id: string, state: SignalState) => void;
+  speed: number;
+  onSpeedChange: (speed: number) => void;
+  getRuntime: (id: string) => SignalRuntime | undefined;
+  // Emergency mode
+  onEmergencyTrigger?: (signalId: string) => void;
+  onEmergencyClear?: () => void;
+  emergencyActiveSignal?: string | null;
 }
 
 export default function SettingsPanel({
@@ -159,6 +171,14 @@ export default function SettingsPanel({
   onSaveIntersectionIPs,
   savingIntersectionIPs,
   intersectionIPMessage,
+  signals,
+  onUpdateSignal,
+  speed,
+  onSpeedChange,
+  getRuntime,
+  onEmergencyTrigger,
+  onEmergencyClear,
+  emergencyActiveSignal,
 }: SettingsPanelProps) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,7 +187,6 @@ export default function SettingsPanel({
   const [expandedIntersections, setExpandedIntersections] = useState<Set<string>>(new Set());
   const [activeIntersection, setActiveIntersection] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [pendingSignalsByIntersection, setPendingSignalsByIntersection] = useState<Record<string, SignalConfig[]>>({});
 
   // New intersection form
   const [newIntId, setNewIntId] = useState('');
@@ -175,46 +194,34 @@ export default function SettingsPanel({
   const [pendingIntersection, setPendingIntersection] = useState<string | null>(null);
   const [currentNewSignals, setCurrentNewSignals] = useState<PendingSignalDraft[]>([]);
 
-  // New signal form
-  const [newSigId, setNewSigId] = useState('');
-  const [newSigInt, setNewSigInt] = useState('');
-  const [newSigRoad, setNewSigRoad] = useState('');
-  const [newSigType, setNewSigType] = useState<'highway' | 'side'>('highway');
+  // Emergency manual trigger
+  const [emergencySignalId, setEmergencySignalId] = useState('');
 
+  // Track whether dialog was just opened to do initial sync only once
+  const openedRef = useRef(false);
+
+  // Only sync from props when dialog FIRST opens — not on every poll
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      openedRef.current = false;
+      return;
+    }
+    if (openedRef.current) return; // Already initialized
+    openedRef.current = true;
 
     const existingIntersectionIds = [...new Set(signalConfigs.map((config) => config.intersection))];
     const nextIntersectionId = getNextIntersectionId(existingIntersectionIds);
 
     setEditedConfigs(signalConfigs.map(toEditableConfig));
-    const initialIds = new Set(existingIntersectionIds);
-    setExpandedIntersections(initialIds);
+    setExpandedIntersections(new Set(existingIntersectionIds));
     setActiveIntersection(signalConfigs[0]?.intersection ?? null);
     setSaveMessage(null);
-    setPendingSignalsByIntersection({});
     setNewIntId(nextIntersectionId);
     setNewIntIp('');
     setPendingIntersection(null);
     setCurrentNewSignals(makeSuggestedSignalDrafts(nextIntersectionId, new Set(signalConfigs.map((config) => config.id))));
-    setNewSigInt(nextIntersectionId);
     setError(null);
-    // Keep local edits intact while the panel remains open.
-    // Only reset when the panel is opened fresh.
   }, [open, signalConfigs]);
-
-  useEffect(() => {
-    if (!open) return;
-    setEditedConfigs((current) => {
-      const currentById = new Map(current.map((c) => [c.id, c]));
-      const merged = signalConfigs.map((config) => ({
-        ...toEditableConfig(config),
-        ...currentById.get(config.id),
-      }));
-      const additional = current.filter((c) => !merged.some((m) => m.id === c.id));
-      return [...merged, ...additional];
-    });
-  }, [signalConfigs, open]);
 
   useEffect(() => {
     if (!newIntId) return;
@@ -244,11 +251,6 @@ export default function SettingsPanel({
     [editedConfigs, signalConfigs],
   );
 
-  const draftSignals = useMemo(
-    () => editedConfigs.filter((config) => !signalConfigs.some((original) => original.id === config.id)),
-    [editedConfigs, signalConfigs],
-  );
-
   const getExistingSignalIdsForIntersection = (intersectionId: string) => {
     return new Set(
       editedConfigs
@@ -266,7 +268,6 @@ export default function SettingsPanel({
     setError(null);
     onIntersectionIpChange(newIntersection, newIntIp.trim());
     setPendingIntersection(newIntersection);
-    setNewSigInt(newIntersection);
     setCurrentNewSignals((current) =>
       current.map((signal) => ({
         ...signal,
@@ -276,7 +277,7 @@ export default function SettingsPanel({
   };
 
   const handleAddSignal = () => {
-    const intId = newSigInt.trim() || newIntId.trim();
+    const intId = newIntId.trim();
     if (!intId) { setError('Intersection is required to add a signal.'); return; }
 
     const existingIds = new Set([
@@ -302,10 +303,6 @@ export default function SettingsPanel({
         editedRoad: false,
       },
     ]);
-
-    if (!newSigInt) {
-      setNewSigInt(intId);
-    }
     setError(null);
   };
 
@@ -397,9 +394,10 @@ export default function SettingsPanel({
       ]);
       setNewIntId(nextIntersectionId);
       setNewIntIp('');
-      setNewSigInt(nextIntersectionId);
       setCurrentNewSignals(makeSuggestedSignalDrafts(nextIntersectionId, new Set(configsToSave.map((config) => config.id))));
       setPendingIntersection(null);
+      // Allow re-init on next open
+      openedRef.current = false;
     } else {
       setSaveMessage('Unable to save changes. Please try again.');
     }
@@ -451,12 +449,25 @@ export default function SettingsPanel({
     setActiveIntersection(intersection);
   };
 
+  const handleManualEmergency = () => {
+    const id = emergencySignalId.trim();
+    if (!id) return;
+    console.log('[Admin] Manual emergency trigger:', id);
+    onEmergencyTrigger?.(id);
+  };
+
+  const handleClearEmergency = () => {
+    console.log('[Admin] Manual emergency clear');
+    onEmergencyClear?.();
+    setEmergencySignalId('');
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-<DialogContent className="left-0 top-0 translate-x-0 translate-y-0 max-w-none w-screen h-screen max-h-none overflow-hidden flex flex-col rounded-none">
+      <DialogContent className="left-0 top-0 translate-x-0 translate-y-0 max-w-none w-screen h-screen max-h-none overflow-hidden flex flex-col rounded-none">
         <DialogHeader>
           <DialogTitle className="font-mono">⚙️ Admin Settings</DialogTitle>
-          <DialogDescription>Manage intersections, signals, and ESP32 configuration.</DialogDescription>
+          <DialogDescription>Manage intersections, signals, ESP32 configuration, and emergency controls.</DialogDescription>
         </DialogHeader>
 
         {!loggedIn ? (
@@ -470,13 +481,27 @@ export default function SettingsPanel({
               </button>
             </div>
 
-            <Tabs defaultValue="esp32ips" className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="w-full">
-                <TabsTrigger value="esp32ips" className="flex-1 text-xs font-mono">Intersection ESP32 IPs</TabsTrigger>
-                <TabsTrigger value="intersections" className="flex-1 text-xs font-mono">Intersections</TabsTrigger>
-                <TabsTrigger value="add" className="flex-1 text-xs font-mono">+ Add New</TabsTrigger>
+            <Tabs defaultValue="signals" className="flex-1 flex flex-col overflow-hidden">
+              <TabsList className="w-full flex-wrap h-auto gap-1 py-1">
+                <TabsTrigger value="signals" className="flex-1 text-xs font-mono">Signals</TabsTrigger>
+                <TabsTrigger value="esp32ips" className="flex-1 text-xs font-mono">ESP32 IPs</TabsTrigger>
+                <TabsTrigger value="intersections" className="flex-1 text-xs font-mono">Edit</TabsTrigger>
+                <TabsTrigger value="add" className="flex-1 text-xs font-mono">+ Add</TabsTrigger>
+                <TabsTrigger value="emergency" className="flex-1 text-xs font-mono text-destructive">🚨 Emergency</TabsTrigger>
               </TabsList>
 
+              {/* Live Signals Tab */}
+              <TabsContent value="signals" className="flex-1 overflow-y-auto pb-3">
+                <AdminPanel
+                  signals={signals}
+                  onUpdate={onUpdateSignal}
+                  speed={speed}
+                  onSpeedChange={onSpeedChange}
+                  getRuntime={getRuntime}
+                />
+              </TabsContent>
+
+              {/* ESP32 IPs Tab */}
               <TabsContent value="esp32ips" className="flex-1 overflow-y-auto pr-1">
                 <div className="rounded-lg border border-border bg-secondary/30 p-3 mb-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -485,7 +510,7 @@ export default function SettingsPanel({
                         Intersection ESP32 IPs
                       </h3>
                       <p className="text-[10px] font-mono text-muted-foreground mt-1">
-                        One IP per intersection. Save to make changes persistent across devices.
+                        One IP per intersection. Save to make changes persistent.
                       </p>
                     </div>
                     <button
@@ -518,6 +543,7 @@ export default function SettingsPanel({
                 </div>
               </TabsContent>
 
+              {/* Edit Intersections Tab */}
               <TabsContent value="intersections" className="flex-1 overflow-auto pr-1 min-h-0">
                 <div className="sticky top-0 z-20 border-b border-border bg-card/95 pb-3 pt-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -645,6 +671,7 @@ export default function SettingsPanel({
                 </div>
               </TabsContent>
 
+              {/* Add New Tab */}
               <TabsContent value="add" className="flex-1 overflow-y-auto pr-1 min-h-0">
                 <div className="space-y-3 pb-6">
                   <div className="rounded-lg border border-border bg-secondary/30 p-3">
@@ -782,6 +809,75 @@ export default function SettingsPanel({
                       >
                         {savingSignalConfigs || savingIntersectionIPs ? 'Saving…' : 'Save'}
                       </button>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Emergency Mode Tab */}
+              <TabsContent value="emergency" className="flex-1 overflow-y-auto pr-1">
+                <div className="space-y-4 pb-6">
+                  <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4">
+                    <h3 className="text-xs font-mono font-bold text-destructive uppercase tracking-wider mb-1">
+                      🚨 Manual Emergency Mode
+                    </h3>
+                    <p className="text-[10px] font-mono text-muted-foreground mb-4">
+                      Use this to manually trigger emergency mode on any signal in case of system failure or manual override needed.
+                    </p>
+
+                    {emergencyActiveSignal ? (
+                      <div className="rounded-md border border-destructive bg-destructive/10 p-3 mb-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-mono font-bold text-destructive">Emergency Active</p>
+                            <p className="text-sm font-mono font-bold text-foreground mt-1">{emergencyActiveSignal} → GREEN</p>
+                            <p className="text-[10px] font-mono text-muted-foreground">All other signals are RED</p>
+                          </div>
+                          <button
+                            onClick={handleClearEmergency}
+                            className="rounded-md bg-destructive px-4 py-2 text-xs font-mono font-bold text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Clear Emergency
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-mono font-semibold text-foreground uppercase tracking-wider">
+                        Signal ID to activate
+                      </label>
+                      <div className="flex gap-2">
+                        <select
+                          value={emergencySignalId}
+                          onChange={(e) => setEmergencySignalId(e.target.value)}
+                          className="flex-1 h-10 rounded border border-border bg-background px-3 text-sm font-mono text-foreground"
+                        >
+                          <option value="">Select a signal...</option>
+                          {signals.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.id} — {s.roadName || s.intersection || 'Unknown'} ({s.state})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={handleManualEmergency}
+                          disabled={!emergencySignalId.trim()}
+                          className="rounded-md bg-destructive px-4 py-2 text-xs font-mono font-bold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                        >
+                          Trigger
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-md border border-border bg-secondary/30 p-3">
+                      <h4 className="text-[10px] font-mono font-bold text-foreground uppercase tracking-wider mb-2">What happens:</h4>
+                      <ul className="text-[10px] font-mono text-muted-foreground space-y-1">
+                        <li>• Selected signal → <span className="text-signal-green font-bold">GREEN</span></li>
+                        <li>• All other signals in that intersection → <span className="text-signal-red font-bold">RED</span></li>
+                        <li>• Normal timer cycle paused until cleared</li>
+                        <li>• ESP32 hardware updated immediately</li>
+                      </ul>
                     </div>
                   </div>
                 </div>
