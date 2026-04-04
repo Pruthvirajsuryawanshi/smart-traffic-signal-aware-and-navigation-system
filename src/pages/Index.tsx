@@ -471,14 +471,6 @@ const Index = () => {
                 allSignals={signals}
                 isAmbulance={ambulanceLoggedIn}
               />
-            ) : mobileTab === 'signals' ? (
-              <AdminPanel
-                signals={signals}
-                onUpdate={updateSignal}
-                speed={speed}
-                onSpeedChange={setSpeed}
-                getRuntime={getRuntime}
-              />
             ) : !ambulanceLoggedIn ? (
               <AmbulanceLogin onLogin={() => setAmbulanceLoggedIn(true)} />
             ) : (
