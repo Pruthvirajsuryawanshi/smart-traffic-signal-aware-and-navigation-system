@@ -197,8 +197,79 @@ export function getTimeUntilGreen(
 }
 
 /**
+ * Calculate recommended speed for crossing a signal smoothly.
+ * Uses safe, bounded calculations to prevent unrealistic speeds.
+ * 
+ * Formula: speed_kmh = (distance_meters / time_seconds) * 3.6
+ * 
+ * Safety limits:
+ * - Minimum: 10 km/h
+ * - Maximum: 80 km/h
+ * - Buffer: 3 seconds subtracted from available time
+ */
+function getRecommendedSpeed(
+  distanceMeters: number,
+  remainingTimeSeconds: number
+): { speed: number | null; isValid: boolean } {
+  // Validate inputs
+  if (!isFinite(distanceMeters) || distanceMeters <= 0) {
+    console.log('[SpeedCalc] Invalid distance:', distanceMeters);
+    return { speed: null, isValid: false };
+  }
+  if (!isFinite(remainingTimeSeconds) || remainingTimeSeconds <= 0) {
+    console.log('[SpeedCalc] Invalid time:', remainingTimeSeconds);
+    return { speed: null, isValid: false };
+  }
+
+  // Add buffer time (3 seconds safety margin)
+  const safeTime = remainingTimeSeconds - 3;
+  if (safeTime <= 0) {
+    console.log('[SpeedCalc] Insufficient time after buffer:', { remainingTimeSeconds, safeTime });
+    return { speed: null, isValid: false };
+  }
+
+  // Calculate speed: (distance / time) * 3.6 = km/h
+  const speedKmh = (distanceMeters / safeTime) * 3.6;
+
+  console.log('[SpeedCalc]', {
+    distance: distanceMeters,
+    remainingTime: remainingTimeSeconds,
+    safeTime,
+    calculatedSpeed: Math.round(speedKmh)
+  });
+
+  // Discard unrealistic speeds
+  if (speedKmh > 120 || speedKmh < 5) {
+    console.log('[SpeedCalc] Speed out of realistic range:', Math.round(speedKmh));
+    return { speed: null, isValid: false };
+  }
+
+  // Clamp to safe driving limits
+  const clampedSpeed = Math.max(10, Math.min(80, speedKmh));
+
+  return { speed: Math.round(clampedSpeed), isValid: true };
+}
+
+/**
+ * Format speed as a user-friendly range.
+ * Returns "X–Y km/h" range or descriptive text.
+ */
+function formatSpeedRange(baseSpeed: number): string {
+  if (baseSpeed <= 10) return 'Maintain 10–15 km/h';
+  if (baseSpeed >= 80) return 'Maintain 70–80 km/h';
+  
+  // Create a ±5 km/h range around the base speed
+  const min = Math.max(10, baseSpeed - 5);
+  const max = Math.min(80, baseSpeed + 5);
+  return `Maintain ${min}–${max} km/h`;
+}
+
+/**
  * Calculate speed prediction for crossing a signal smoothly.
  * Returns advisory text and recommended speed.
+ * 
+ * Uses synchronized signal timing and bounded calculations
+ * to ensure realistic, safe speed recommendations.
  */
 export function getSpeedPrediction(
   distanceMeters: number,
@@ -220,71 +291,112 @@ export function getSpeedPrediction(
   // Signal is currently GREEN
   if (countdown.currentState === 'GREEN') {
     const greenRemaining = countdown.remainingSec;
-    if (arrivalSec < greenRemaining - 2) {
+    
+    // Can comfortably cross at current speed
+    if (arrivalSec < greenRemaining - 3) {
       return {
-        text: `Go at ${currentSpeedKmh} km/h — signal is GREEN`,
+        text: `${formatSpeedRange(currentSpeedKmh)} to pass smoothly`,
         recommendedSpeedKmh: currentSpeedKmh,
         canCross: true,
       };
     }
-    // Need to speed up to catch green
-    const neededSpeed = (distanceMeters / Math.max(1, greenRemaining - 2)) * 3.6;
-    if (neededSpeed <= 80 && neededSpeed > currentSpeedKmh) {
+    
+    // Need to adjust speed to catch green
+    const timeToCatch = greenRemaining - 3;
+    const speedResult = getRecommendedSpeed(distanceMeters, timeToCatch);
+    
+    if (speedResult.isValid && speedResult.speed && speedResult.speed > currentSpeedKmh) {
       return {
-        text: `Speed up to ${Math.round(neededSpeed)} km/h to catch GREEN`,
-        recommendedSpeedKmh: Math.round(neededSpeed),
+        text: `Speed up to ${speedResult.speed} km/h to catch GREEN`,
+        recommendedSpeedKmh: speedResult.speed,
         canCross: true,
       };
     }
-    // Can't catch this green, wait for next
+    
+    // Can't catch this green, plan for next cycle
     const nextGreenIn = greenRemaining + yellow + timeUntilGreen;
-    const slowSpeed = (distanceMeters / Math.max(1, nextGreenIn)) * 3.6;
+    const nextSpeed = getRecommendedSpeed(distanceMeters, nextGreenIn);
+    
+    if (nextSpeed.isValid && nextSpeed.speed) {
+      return {
+        text: `${formatSpeedRange(nextSpeed.speed)} for next GREEN`,
+        recommendedSpeedKmh: nextSpeed.speed,
+        canCross: false,
+      };
+    }
+    
     return {
-      text: `Slow to ${Math.max(10, Math.round(slowSpeed))} km/h for next GREEN`,
-      recommendedSpeedKmh: Math.max(10, Math.round(slowSpeed)),
+      text: 'Slow down, signal will turn red soon',
+      recommendedSpeedKmh: Math.max(10, Math.min(30, currentSpeedKmh - 10)),
       canCross: false,
     };
   }
 
   // Signal is YELLOW
   if (countdown.currentState === 'YELLOW') {
-    // Wait for next GREEN cycle
     const waitForGreen = timeUntilGreen;
-    if (waitForGreen <= 0) {
-      return { text: `Signal turning GREEN soon`, recommendedSpeedKmh: currentSpeedKmh, canCross: true };
+    if (waitForGreen <= 3) {
+      return { 
+        text: 'Signal turning GREEN soon — maintain current speed', 
+        recommendedSpeedKmh: currentSpeedKmh, 
+        canCross: true 
+      };
     }
-    // Arrive when it turns GREEN
-    const idealSpeed = (distanceMeters / Math.max(1, waitForGreen)) * 3.6;
-    const clamped = Math.max(10, Math.min(80, Math.round(idealSpeed)));
+    
+    // Calculate speed to arrive when green
+    const speedResult = getRecommendedSpeed(distanceMeters, waitForGreen);
+    if (speedResult.isValid && speedResult.speed) {
+      return {
+        text: `${formatSpeedRange(speedResult.speed)} for smooth crossing`,
+        recommendedSpeedKmh: speedResult.speed,
+        canCross: false,
+      };
+    }
+    
     return {
-      text: `Go at ${clamped} km/h for smooth crossing`,
-      recommendedSpeedKmh: clamped,
+      text: 'Slow down and wait for GREEN',
+      recommendedSpeedKmh: Math.max(10, Math.min(20, currentSpeedKmh - 15)),
       canCross: false,
     };
   }
 
   // Signal is RED
-  if (timeUntilGreen <= 0) {
-    return { text: `Signal turning GREEN soon`, recommendedSpeedKmh: currentSpeedKmh, canCross: true };
+  if (timeUntilGreen <= 3) {
+    return { 
+      text: 'Signal turning GREEN soon — maintain current speed', 
+      recommendedSpeedKmh: currentSpeedKmh, 
+      canCross: true 
+    };
   }
 
-  // Can we arrive exactly when it turns green?
-  const idealSpeed = (distanceMeters / Math.max(1, timeUntilGreen)) * 3.6;
-  const clamped = Math.max(10, Math.min(80, Math.round(idealSpeed)));
+  // Calculate ideal speed to arrive at green
+  const speedResult = getRecommendedSpeed(distanceMeters, timeUntilGreen);
+  
+  if (!speedResult.isValid || !speedResult.speed) {
+    // Fallback: suggest moderate speed
+    return {
+      text: 'Slow down, signal is RED',
+      recommendedSpeedKmh: Math.max(10, Math.min(30, currentSpeedKmh - 10)),
+      canCross: false,
+    };
+  }
 
   // Check if arriving during green window
-  const arrivalAtIdeal = distanceMeters / (clamped / 3.6);
-  if (Math.abs(arrivalAtIdeal - timeUntilGreen) < green) {
+  const arrivalTime = distanceMeters / (speedResult.speed / 3.6);
+  const arrivalOffset = Math.abs(arrivalTime - timeUntilGreen);
+  const canCross = arrivalOffset < green - 3; // 3 second safety margin
+
+  if (canCross) {
     return {
-      text: `Go at ${clamped} km/h — GREEN in ${timeUntilGreen}s`,
-      recommendedSpeedKmh: clamped,
+      text: `${formatSpeedRange(speedResult.speed)} to pass on GREEN`,
+      recommendedSpeedKmh: speedResult.speed,
       canCross: true,
     };
   }
 
   return {
-    text: `Slow to ${clamped} km/h — GREEN in ${timeUntilGreen}s`,
-    recommendedSpeedKmh: clamped,
+    text: `${formatSpeedRange(speedResult.speed)} — GREEN in ${Math.round(timeUntilGreen)}s`,
+    recommendedSpeedKmh: speedResult.speed,
     canCross: false,
   };
 }
