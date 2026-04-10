@@ -3,6 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import AdminAuthCard from './AdminAuthCard';
 import AdminPanel from './AdminPanel';
+import ViolationMonitorPanel from './ViolationMonitorPanel';
+import EmergencyValidationPanel from './EmergencyValidationPanel';
+import type { RuleViolation, ViolationStatus } from '@/types/emergency-validation';
 import type { TrafficSignal, SignalState, SignalRuntime } from '@/types/signal';
 
 export type SignalConfig = {

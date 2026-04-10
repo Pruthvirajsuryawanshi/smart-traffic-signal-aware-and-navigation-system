@@ -108,7 +108,7 @@ export default function ProofUploadForm({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-card rounded-lg border border-border w-full max-w-lg max-h-[90vh] overflow-y-auto m-4">
         {/* Header */}
         <div className="sticky top-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
