@@ -510,17 +510,17 @@ const Index = () => {
           </div>
 
           <div className="flex gap-1 px-4 pb-2">
-            {(['route', 'prediction', 'ambulance', 'admin'] as const).map((tab) => (
+            {(['route', 'prediction', 'ambulance'] as const).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setMobileTab(tab as any)}
+                onClick={() => setMobileTab(tab)}
                 className={`flex-1 py-1.5 rounded-md text-xs font-mono font-semibold transition-all ${
                   mobileTab === tab
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-secondary text-muted-foreground'
                 }`}
               >
-                {tab === 'route' ? 'Route' : tab === 'prediction' ? '🎯' : tab === 'ambulance' ? '🚑' : '📊'}
+                {tab === 'route' ? 'Route' : tab === 'prediction' ? '🎯' : '🚑'}
               </button>
             ))}
           </div>
@@ -536,14 +536,6 @@ const Index = () => {
               />
             ) : mobileTab === 'prediction' ? (
               <SpeedPredictionPanel prediction={speedPrediction} />
-            ) : mobileTab === 'admin' ? (
-              <div className="space-y-3">
-                <ViolationMonitorPanel
-                  violations={violationDetection.violations}
-                  onUpdateStatus={violationDetection.updateViolationStatus}
-                />
-                <EmergencyValidationPanel />
-              </div>
             ) : !ambulanceLoggedIn ? (
               <AmbulanceLogin onLogin={() => setAmbulanceLoggedIn(true)} />
             ) : (
