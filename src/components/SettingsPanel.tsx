@@ -185,6 +185,8 @@ export default function SettingsPanel({
   onEmergencyTrigger,
   onEmergencyClear,
   emergencyActiveSignal,
+  violations,
+  onUpdateViolationStatus,
 }: SettingsPanelProps) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
