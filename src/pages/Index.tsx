@@ -432,15 +432,6 @@ const Index = () => {
             )}
           </TabsContent>
 
-          <TabsContent value="admin" className="flex-1 overflow-y-auto pb-3">
-            <div className="space-y-3">
-              <ViolationMonitorPanel
-                violations={violationDetection.violations}
-                onUpdateStatus={violationDetection.updateViolationStatus}
-              />
-              <EmergencyValidationPanel />
-            </div>
-          </TabsContent>
         </Tabs>
 
         <div className="p-3 border-t border-border flex items-center justify-between">
