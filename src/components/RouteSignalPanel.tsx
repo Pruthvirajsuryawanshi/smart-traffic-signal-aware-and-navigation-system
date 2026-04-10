@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { RouteSignalInfo } from '@/types/signal';
 import type { TrafficSignal } from '@/types/signal';
-import { formatCountdown, getCountdown, getSpeedPrediction } from '@/lib/countdown';
+import { formatCountdown, getCountdown } from '@/lib/countdown';
+import { useSpeedPrediction } from '@/hooks/useSpeedPrediction';
 
 interface RouteSignalPanelProps {
   routeSignals: RouteSignalInfo[];
@@ -43,6 +44,14 @@ export default function RouteSignalPanel({ routeSignals, routeDistance, speed, a
     return () => clearInterval(interval);
   }, []);
 
+  // Use the new speed prediction hook
+  const speedPrediction = useSpeedPrediction(
+    allSignals,
+    routeSignals,
+    speed || 35,
+    null
+  );
+
   return (
     <div className="bg-card rounded-lg border border-border p-3 md:p-4">
       <h2 className="text-sm font-mono font-bold text-foreground tracking-wider uppercase mb-3">
@@ -76,8 +85,10 @@ export default function RouteSignalPanel({ routeSignals, routeDistance, speed, a
           {routeSignals.map((info, idx) => {
             const countdown = getCountdown(info.signal.state, info.signal.updated_at, info.signal.id, allSignals);
             const countdownText = formatCountdown(info.signal.state, info.signal.updated_at, info.signal.id, allSignals);
-            const prediction = (speed && !isAmbulance)
-              ? getSpeedPrediction(info.distanceFromStart, info.signal.state, info.signal.updated_at, info.signal.id, allSignals, speed)
+            // Get prediction for this specific signal from the hook results
+            const signalPrediction = speedPrediction.predictions.find(p => p.signalId === info.signal.id);
+            const prediction = (speed && !isAmbulance && signalPrediction) 
+              ? signalPrediction.recommendation 
               : null;
 
             return (
@@ -121,7 +132,7 @@ export default function RouteSignalPanel({ routeSignals, routeDistance, speed, a
                     <span className={`text-[10px] font-mono font-semibold ${
                       prediction.canCross ? 'text-signal-green' : 'text-signal-yellow'
                     }`}>
-                      {prediction.text}
+                      {prediction.message}
                     </span>
                   </div>
                 )}

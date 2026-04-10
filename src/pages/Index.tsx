@@ -1,16 +1,25 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSignals } from '@/hooks/useSignals';
 import { useAmbulanceSimulation } from '@/hooks/useAmbulanceSimulation';
+import { useEmergencyTracking } from '@/hooks/useEmergencyTracking';
+import { useViolationDetection } from '@/hooks/useViolationDetection';
 import TrafficMap from '@/components/TrafficMap';
 import RouteSignalPanel from '@/components/RouteSignalPanel';
 import AmbulanceDashboard from '@/components/AmbulanceDashboard';
 import AmbulanceLogin from '@/components/AmbulanceLogin';
 import SettingsPanel from '@/components/SettingsPanel';
+import SpeedPredictionPanel from '@/components/SpeedPredictionPanel';
+import EmergencyModeControl from '@/components/EmergencyModeControl';
+import ProofUploadForm from '@/components/ProofUploadForm';
+import ViolationMonitorPanel from '@/components/ViolationMonitorPanel';
+import EmergencyValidationPanel from '@/components/EmergencyValidationPanel';
+import { useSpeedPrediction } from '@/hooks/useSpeedPrediction';
 import { supabase } from '@/integrations/supabase/client';
 import type { SignalConfig } from '@/components/SettingsPanel';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { SIGNAL_METADATA } from '@/types/signal';
 import type { RouteSignalInfo, TrafficSignal } from '@/types/signal';
+import type { EmergencyProof } from '@/types/emergency-validation';
 
 const Index = () => {
   const { signals, loading, updateSignal, refreshSignals, getRuntime, runtimes } = useSignals();
@@ -18,7 +27,7 @@ const Index = () => {
   const [routeDistance, setRouteDistance] = useState(0);
   const [speed, setSpeed] = useState(35);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [mobileTab, setMobileTab] = useState<'route' | 'signals' | 'ambulance'>('route');
+  const [mobileTab, setMobileTab] = useState<'route' | 'prediction' | 'ambulance' | 'admin'>('route');
   const [ambulanceLoggedIn, setAmbulanceLoggedIn] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [signalConfigs, setSignalConfigs] = useState<SignalConfig[]>([]);
@@ -39,6 +48,22 @@ const Index = () => {
   });
 
   const ambulance = useAmbulanceSimulation(signals, routeSignals, intersectionIPs);
+
+  // Emergency validation system
+  const emergencyTracking = useEmergencyTracking();
+  const violationDetection = useViolationDetection();
+
+  // State for proof upload modal
+  const [showProofUpload, setShowProofUpload] = useState(false);
+  const [lastCompletedSession, setLastCompletedSession] = useState<any>(null);
+
+  // Speed prediction for the route
+  const speedPrediction = useSpeedPrediction(
+    signals,
+    routeSignals,
+    speed,
+    ambulance.status.position ? { lat: ambulance.status.position.lat, lng: ambulance.status.position.lon } : null
+  );
 
   const mapSignals = useMemo(() => signals, [signals]);
 
@@ -334,8 +359,14 @@ const Index = () => {
             <TabsTrigger value="route" className="flex-1 text-xs font-mono">
               Route
             </TabsTrigger>
+            <TabsTrigger value="prediction" className="flex-1 text-xs font-mono">
+              🎯
+            </TabsTrigger>
             <TabsTrigger value="ambulance" className="flex-1 text-xs font-mono">
               🚑
+            </TabsTrigger>
+            <TabsTrigger value="admin" className="flex-1 text-xs font-mono">
+              📊
             </TabsTrigger>
           </TabsList>
 
@@ -349,25 +380,67 @@ const Index = () => {
             />
           </TabsContent>
 
+          <TabsContent value="prediction" className="flex-1 overflow-y-auto pb-3">
+            <SpeedPredictionPanel prediction={speedPrediction} />
+          </TabsContent>
+
           <TabsContent value="ambulance" className="flex-1 overflow-y-auto pb-3">
             {!ambulanceLoggedIn ? (
               <AmbulanceLogin onLogin={() => setAmbulanceLoggedIn(true)} />
             ) : (
-              <AmbulanceDashboard
-                status={ambulance.status}
-                speed={ambulance.speed}
-                onSpeedChange={ambulance.setSpeed}
-                onLoadCSV={ambulance.loadCSV}
-                onStart={ambulance.start}
-                onStop={ambulance.stop}
-                onReset={ambulance.reset}
-                onLogout={handleAmbulanceLogout}
-                onClearRoute={handleClearRoute}
-                routeLength={ambulance.route.length}
-                trackLive={trackLive}
-                onTrackLiveChange={setTrackLive}
-              />
+              <div className="space-y-3">
+                <AmbulanceDashboard
+                  status={ambulance.status}
+                  speed={ambulance.speed}
+                  onSpeedChange={ambulance.setSpeed}
+                  onLoadCSV={ambulance.loadCSV}
+                  onStart={ambulance.start}
+                  onStop={ambulance.stop}
+                  onReset={ambulance.reset}
+                  onLogout={handleAmbulanceLogout}
+                  onClearRoute={handleClearRoute}
+                  routeLength={ambulance.route.length}
+                  trackLive={trackLive}
+                  onTrackLiveChange={setTrackLive}
+                />
+                <EmergencyModeControl
+                  isActive={emergencyTracking.isActive}
+                  activeSession={emergencyTracking.activeSession}
+                  elapsedSeconds={emergencyTracking.elapsedSeconds}
+                  proofDeadlineRemaining={emergencyTracking.proofDeadlineRemaining}
+                  lastCompletedSession={lastCompletedSession}
+                  onStartEmergency={() => {
+                    if (ambulance.status.position) {
+                      emergencyTracking.startEmergency(
+                        'DRV-' + Date.now(),
+                        'Driver',
+                        'AMB-001',
+                        'City Hospital',
+                        { lat: ambulance.status.position.lat, lng: ambulance.status.position.lon }
+                      );
+                    }
+                  }}
+                  onEndEmergency={() => {
+                    emergencyTracking.endEmergency(
+                      ambulance.status.position ? { lat: ambulance.status.position.lat, lng: ambulance.status.position.lon } : undefined
+                    );
+                    setLastCompletedSession(emergencyTracking.activeSession);
+                  }}
+                  onOpenProofUpload={() => setShowProofUpload(true)}
+                  currentPosition={ambulance.status.position ? { lat: ambulance.status.position.lat, lng: ambulance.status.position.lon } : null}
+                />
+              </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="admin" className="flex-1 overflow-y-auto pb-3">
+            <div className="space-y-3">
+              <ViolationMonitorPanel
+                violations={violationDetection.violations}
+                onUpdateStatus={violationDetection.updateViolationStatus}
+              />
+              <EmergencyValidationPanel />
+            </div>
           </TabsContent>
         </Tabs>
 
@@ -447,7 +520,7 @@ const Index = () => {
           </div>
 
           <div className="flex gap-1 px-4 pb-2">
-            {(['route', 'ambulance'] as const).map((tab) => (
+            {(['route', 'prediction', 'ambulance', 'admin'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setMobileTab(tab as any)}
@@ -457,7 +530,7 @@ const Index = () => {
                     : 'bg-secondary text-muted-foreground'
                 }`}
               >
-                {tab === 'route' ? 'Route' : '🚑'}
+                {tab === 'route' ? 'Route' : tab === 'prediction' ? '🎯' : tab === 'ambulance' ? '🚑' : '📊'}
               </button>
             ))}
           </div>
@@ -471,27 +544,79 @@ const Index = () => {
                 allSignals={signals}
                 isAmbulance={ambulanceLoggedIn}
               />
+            ) : mobileTab === 'prediction' ? (
+              <SpeedPredictionPanel prediction={speedPrediction} />
+            ) : mobileTab === 'admin' ? (
+              <div className="space-y-3">
+                <ViolationMonitorPanel
+                  violations={violationDetection.violations}
+                  onUpdateStatus={violationDetection.updateViolationStatus}
+                />
+                <EmergencyValidationPanel />
+              </div>
             ) : !ambulanceLoggedIn ? (
               <AmbulanceLogin onLogin={() => setAmbulanceLoggedIn(true)} />
             ) : (
-              <AmbulanceDashboard
-                status={ambulance.status}
-                speed={ambulance.speed}
-                onSpeedChange={ambulance.setSpeed}
-                onLoadCSV={ambulance.loadCSV}
-                onStart={ambulance.start}
-                onStop={ambulance.stop}
-                onReset={ambulance.reset}
-                onLogout={handleAmbulanceLogout}
-                onClearRoute={handleClearRoute}
-                routeLength={ambulance.route.length}
-                trackLive={trackLive}
-                onTrackLiveChange={setTrackLive}
-              />
+              <div className="space-y-3">
+                <AmbulanceDashboard
+                  status={ambulance.status}
+                  speed={ambulance.speed}
+                  onSpeedChange={ambulance.setSpeed}
+                  onLoadCSV={ambulance.loadCSV}
+                  onStart={ambulance.start}
+                  onStop={ambulance.stop}
+                  onReset={ambulance.reset}
+                  onLogout={handleAmbulanceLogout}
+                  onClearRoute={handleClearRoute}
+                  routeLength={ambulance.route.length}
+                  trackLive={trackLive}
+                  onTrackLiveChange={setTrackLive}
+                />
+                <EmergencyModeControl
+                  isActive={emergencyTracking.isActive}
+                  activeSession={emergencyTracking.activeSession}
+                  elapsedSeconds={emergencyTracking.elapsedSeconds}
+                  proofDeadlineRemaining={emergencyTracking.proofDeadlineRemaining}
+                  lastCompletedSession={lastCompletedSession}
+                  onStartEmergency={() => {
+                    if (ambulance.status.position) {
+                      emergencyTracking.startEmergency(
+                        'DRV-' + Date.now(),
+                        'Driver',
+                        'AMB-001',
+                        'City Hospital',
+                        { lat: ambulance.status.position.lat, lng: ambulance.status.position.lon }
+                      );
+                    }
+                  }}
+                  onEndEmergency={() => {
+                    emergencyTracking.endEmergency(
+                      ambulance.status.position ? { lat: ambulance.status.position.lat, lng: ambulance.status.position.lon } : undefined
+                    );
+                    setLastCompletedSession(emergencyTracking.activeSession);
+                  }}
+                  onOpenProofUpload={() => setShowProofUpload(true)}
+                  currentPosition={ambulance.status.position ? { lat: ambulance.status.position.lat, lng: ambulance.status.position.lon } : null}
+                />
+              </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Proof Upload Modal */}
+      {showProofUpload && lastCompletedSession && (
+        <ProofUploadForm
+          session={lastCompletedSession}
+          deadlineRemaining={emergencyTracking.proofDeadlineRemaining || undefined}
+          onClose={() => setShowProofUpload(false)}
+          onSubmit={(proof) => {
+            console.log('Proof submitted:', proof);
+            setShowProofUpload(false);
+            // In production, send to Supabase
+          }}
+        />
+      )}
     </div>
   );
 };
