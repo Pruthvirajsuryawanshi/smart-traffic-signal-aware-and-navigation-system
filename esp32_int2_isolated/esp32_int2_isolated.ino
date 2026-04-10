@@ -4,8 +4,8 @@
 #include <ArduinoJson.h>
 
 // ===================== WIFI =====================
-const char* WIFI_SSID = "internet";
-const char* WIFI_PASS = "internet";
+const char* WIFI_SSID = "Hackathon-2025";
+const char* WIFI_PASS = "20252025";
 
 // ===================== CLOUD ====================
 const char* CLOUD_URL = "https://ssvddgrfxqomtonfukew.supabase.co/functions/v1/update-signals";
@@ -93,11 +93,11 @@ void setOneSignalLED(int idx, const String& state) {
 }
 
 void beepBuzzer() {
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 5; i++) {
     digitalWrite(BUZZER_PIN, HIGH);
-    delay(100);
+    delay(200);
     digitalWrite(BUZZER_PIN, LOW);
-    delay(100);
+    delay(200);
   }
 }
 
