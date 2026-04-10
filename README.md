@@ -78,6 +78,15 @@ Traffic signal state is synchronized from Supabase tables such as `traffic_signa
 
 The app includes optional local network support to send `emergency` and `normal` commands to ESP32 devices at configured intersection IPs. This requires the app and ESP32 devices to be on the same network.
 
+## Demo Video
+
+Watch the working demo here:
+
+https://youtube.com/shorts/TPqlkP2FtBA?feature=share
+
+<!-- Embed-style clickable thumbnail -->
+[![Watch Demo](https://img.youtube.com/vi/TPqlkP2FtBA/0.jpg)](https://youtube.com/shorts/TPqlkP2FtBA?feature=share)
+
 ## Notes
 
 - The current UI title is **Traffic Signal Nav**.
