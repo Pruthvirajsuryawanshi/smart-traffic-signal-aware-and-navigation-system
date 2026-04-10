@@ -367,9 +367,6 @@ const Index = () => {
             <TabsTrigger value="ambulance" className="flex-1 text-xs font-mono">
               🚑
             </TabsTrigger>
-            <TabsTrigger value="admin" className="flex-1 text-xs font-mono">
-              📊
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="route" className="flex-1 overflow-y-auto pb-3">
