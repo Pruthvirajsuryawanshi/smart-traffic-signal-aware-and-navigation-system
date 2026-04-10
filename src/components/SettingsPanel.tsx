@@ -3,6 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import AdminAuthCard from './AdminAuthCard';
 import AdminPanel from './AdminPanel';
+import ViolationMonitorPanel from './ViolationMonitorPanel';
+import EmergencyValidationPanel from './EmergencyValidationPanel';
+import type { RuleViolation, ViolationStatus } from '@/types/emergency-validation';
 import type { TrafficSignal, SignalState, SignalRuntime } from '@/types/signal';
 
 export type SignalConfig = {
@@ -151,6 +154,9 @@ interface SettingsPanelProps {
   onEmergencyTrigger?: (signalId: string) => void;
   onEmergencyClear?: () => void;
   emergencyActiveSignal?: string | null;
+  // Dashboard props
+  violations?: RuleViolation[];
+  onUpdateViolationStatus?: (id: string, status: ViolationStatus) => void;
 }
 
 export default function SettingsPanel({
@@ -179,6 +185,8 @@ export default function SettingsPanel({
   onEmergencyTrigger,
   onEmergencyClear,
   emergencyActiveSignal,
+  violations,
+  onUpdateViolationStatus,
 }: SettingsPanelProps) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -488,6 +496,7 @@ export default function SettingsPanel({
                 <TabsTrigger value="intersections" className="flex-1 text-xs font-mono">Edit</TabsTrigger>
                 <TabsTrigger value="add" className="flex-1 text-xs font-mono">+ Add</TabsTrigger>
                 <TabsTrigger value="emergency" className="flex-1 text-xs font-mono text-destructive">🚨 Emergency</TabsTrigger>
+                <TabsTrigger value="dashboard" className="flex-1 text-xs font-mono">📊 Dashboard</TabsTrigger>
               </TabsList>
 
               {/* Live Signals Tab */}
@@ -880,6 +889,24 @@ export default function SettingsPanel({
                       </ul>
                     </div>
                   </div>
+                </div>
+              </TabsContent>
+
+              {/* Dashboard Tab */}
+              <TabsContent value="dashboard" className="flex-1 overflow-y-auto pb-3">
+                <div className="space-y-3">
+                  {violations && onUpdateViolationStatus ? (
+                    <ViolationMonitorPanel
+                      violations={violations}
+                      onUpdateStatus={onUpdateViolationStatus}
+                    />
+                  ) : (
+                    <ViolationMonitorPanel
+                      violations={[]}
+                      onUpdateStatus={() => {}}
+                    />
+                  )}
+                  <EmergencyValidationPanel />
                 </div>
               </TabsContent>
             </Tabs>

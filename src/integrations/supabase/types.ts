@@ -104,6 +104,39 @@ export type Database = {
         }
         Relationships: []
       }
+      traffic_signals_int3: {
+        Row: {
+          id: string
+          intersection: string | null
+          latitude: number | null
+          longitude: number | null
+          road_name: string | null
+          state: string
+          type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id: string
+          intersection?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          road_name?: string | null
+          state?: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          intersection?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          road_name?: string | null
+          state?: string
+          type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
