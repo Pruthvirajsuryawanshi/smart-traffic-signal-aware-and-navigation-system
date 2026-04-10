@@ -88,110 +88,24 @@ export default function TrafficMap({
   useEffect(() => {
     if (mapRef.current) return;
 
-    // Delay initialization to ensure DOM is ready
-    const initMap = () => {
-      // Ensure container has dimensions before initializing
-      const container = document.getElementById('traffic-map');
-      if (!container) {
-        console.error('Map container not found');
-        return;
-      }
+    const map = L.map('traffic-map', {
+      center: [19.8385, 75.2497],
+      zoom: 16,
+      zoomControl: true,
+    });
 
-      console.log('Container dimensions:', container.offsetWidth, container.offsetHeight);
-      if (container.offsetWidth === 0 || container.offsetHeight === 0) {
-        console.warn('Container has zero dimensions, retrying...');
-        setTimeout(initMap, 200);
-        return;
-      }
+    const streetLayer = L.tileLayer(
+      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { maxZoom: 19, attribution: '© OpenStreetMap contributors' }
+    ).addTo(map);
 
-      // Ensure container has explicit dimensions
-      container.style.width = container.offsetWidth + 'px';
-      container.style.height = container.offsetHeight + 'px';
+    const satelliteLayer = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, attribution: 'Tiles © Esri' }
+    );
 
-      console.log('Initializing map...');
-      const map = L.map('traffic-map', {
-        center: [19.8385, 75.2497],
-        zoom: 16,
-        zoomControl: true,
-        preferCanvas: false
-      });
-
-      const streetLayer = L.tileLayer(
-        'https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png',
-        {
-          maxZoom: 19,
-          attribution: '© OpenStreetMap contributors, Wikimedia Maps'
-        }
-      ).addTo(map);
-
-      // Add fallback tile layer
-      const fallbackLayer = L.tileLayer(
-        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        {
-          maxZoom: 19,
-          subdomains: ['a', 'b', 'c'],
-          attribution: '© OpenStreetMap contributors'
-        }
-      );
-
-      // Switch to fallback if primary fails
-      streetLayer.on('tileerror', () => {
-        console.log('Primary tiles failed, switching to fallback');
-        map.removeLayer(streetLayer);
-        map.addLayer(fallbackLayer);
-      });
-
-      // Override default Leaflet background
-      const style = document.createElement('style');
-      style.textContent = `
-        #traffic-map {
-          background-color: #f3f4f6 !important;
-        }
-        .leaflet-container {
-          background-color: #f3f4f6 !important;
-        }
-        .leaflet-tile-pane {
-          z-index: 2 !important;
-        }
-        .leaflet-overlay-pane {
-          z-index: 4 !important;
-        }
-        .leaflet-control-container {
-          z-index: 6 !important;
-        }
-      `;
-      document.head.appendChild(style);
-
-      const satelliteLayer = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        { 
-          maxZoom: 19, 
-          attribution: 'Tiles © Esri'
-        }
-      );
-
-      streetLayerRef.current = streetLayer;
-      satelliteLayerRef.current = satelliteLayer;
-      mapRef.current = map;
-
-      // Force map to reload tiles after a delay
-      setTimeout(() => {
-        map.invalidateSize();
-        streetLayer.redraw();
-        console.log('Map invalidated and tiles redrawn');
-        
-        // Try again after another delay
-        setTimeout(() => {
-          map.invalidateSize();
-          streetLayer.redraw();
-          setMapReady(true);
-          console.log('Map ready after second redraw');
-        }, 1000);
-      }, 500);
-    };
-
-    // Start initialization
-    setTimeout(initMap, 100);
+    streetLayerRef.current = streetLayer;
+    satelliteLayerRef.current = satelliteLayer;
 
     // Initialize routing control
     const routingControl = (L as any).Routing.control({
@@ -330,18 +244,6 @@ export default function TrafficMap({
       map.remove();
       mapRef.current = null;
     };
-  }, []);
-
-  // Handle window resize
-  useEffect(() => {
-    const handleResize = () => {
-      if (mapRef.current) {
-        mapRef.current.invalidateSize();
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Handle map clicks for start/end/signal point
@@ -638,16 +540,8 @@ export default function TrafficMap({
   }, [onRouteSignals, onRouteDistance]);
 
   return (
-    <div className="relative h-full w-full border-[5px] border-primary rounded-xl bg-gray-100" style={{ minHeight: '400px' }}>
-      <div 
-        id="traffic-map" 
-        className="h-full w-full bg-gray-200" 
-        style={{
-          minHeight: '400px',
-          position: 'relative',
-          zIndex: 1
-        }} 
-      />
+    <div className="relative h-full w-full border-[5px] border-primary rounded-xl overflow-hidden">
+      <div id="traffic-map" className="h-full w-full" />
 
       {/* Search - top center, shifts right on mobile to avoid status pill */}
       <div className="absolute top-3 left-1/2 -translate-x-1/2 md:left-1/2 md:-translate-x-1/2 z-[1000]">
