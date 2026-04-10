@@ -335,6 +335,8 @@ const Index = () => {
             setEmergencyActiveSignal(null);
           }}
           emergencyActiveSignal={emergencyActiveSignal}
+          violations={violationDetection.violations}
+          onUpdateViolationStatus={violationDetection.updateViolationStatus}
         />
 
         {/* Status bar */}
