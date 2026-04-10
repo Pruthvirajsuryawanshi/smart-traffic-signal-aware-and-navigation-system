@@ -3,6 +3,7 @@ import { useSignals } from '@/hooks/useSignals';
 import { useAmbulanceSimulation } from '@/hooks/useAmbulanceSimulation';
 import { useEmergencyTracking } from '@/hooks/useEmergencyTracking';
 import { useViolationDetection } from '@/hooks/useViolationDetection';
+import { getHospitalName } from '@/lib/hospital-finder';
 import TrafficMap from '@/components/TrafficMap';
 import RouteSignalPanel from '@/components/RouteSignalPanel';
 import AmbulanceDashboard from '@/components/AmbulanceDashboard';
@@ -406,13 +407,18 @@ const Index = () => {
                   elapsedSeconds={emergencyTracking.elapsedSeconds}
                   proofDeadlineRemaining={emergencyTracking.proofDeadlineRemaining}
                   lastCompletedSession={lastCompletedSession}
-                  onStartEmergency={() => {
+                  onStartEmergency={async () => {
                     if (ambulance.status.position) {
+                      // Use route end location to find nearest hospital
+                      const endPoint = ambulance.route.length > 0
+                        ? ambulance.route[ambulance.route.length - 1]
+                        : ambulance.status.position;
+                      const hospitalName = await getHospitalName(endPoint.lat, endPoint.lon ?? (endPoint as any).lng);
                       emergencyTracking.startEmergency(
                         'DRV-' + Date.now(),
                         'Driver',
                         'AMB-001',
-                        'City Hospital',
+                        hospitalName,
                         { lat: ambulance.status.position.lat, lng: ambulance.status.position.lon }
                       );
                     }
