@@ -154,6 +154,9 @@ interface SettingsPanelProps {
   onEmergencyTrigger?: (signalId: string) => void;
   onEmergencyClear?: () => void;
   emergencyActiveSignal?: string | null;
+  // Dashboard props
+  violations?: RuleViolation[];
+  onUpdateViolationStatus?: (id: string, status: ViolationStatus) => void;
 }
 
 export default function SettingsPanel({
