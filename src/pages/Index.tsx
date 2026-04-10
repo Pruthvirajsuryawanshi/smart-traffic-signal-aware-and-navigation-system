@@ -27,7 +27,7 @@ const Index = () => {
   const [routeDistance, setRouteDistance] = useState(0);
   const [speed, setSpeed] = useState(35);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [mobileTab, setMobileTab] = useState<'route' | 'prediction' | 'ambulance' | 'admin'>('route');
+  const [mobileTab, setMobileTab] = useState<'route' | 'prediction' | 'ambulance'>('route');
   const [ambulanceLoggedIn, setAmbulanceLoggedIn] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [signalConfigs, setSignalConfigs] = useState<SignalConfig[]>([]);
