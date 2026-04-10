@@ -891,6 +891,24 @@ export default function SettingsPanel({
                   </div>
                 </div>
               </TabsContent>
+
+              {/* Dashboard Tab */}
+              <TabsContent value="dashboard" className="flex-1 overflow-y-auto pb-3">
+                <div className="space-y-3">
+                  {violations && onUpdateViolationStatus ? (
+                    <ViolationMonitorPanel
+                      violations={violations}
+                      onUpdateStatus={onUpdateViolationStatus}
+                    />
+                  ) : (
+                    <ViolationMonitorPanel
+                      violations={[]}
+                      onUpdateStatus={() => {}}
+                    />
+                  )}
+                  <EmergencyValidationPanel />
+                </div>
+              </TabsContent>
             </Tabs>
           </div>
         )}
