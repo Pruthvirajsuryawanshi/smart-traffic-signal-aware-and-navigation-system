@@ -496,6 +496,7 @@ export default function SettingsPanel({
                 <TabsTrigger value="intersections" className="flex-1 text-xs font-mono">Edit</TabsTrigger>
                 <TabsTrigger value="add" className="flex-1 text-xs font-mono">+ Add</TabsTrigger>
                 <TabsTrigger value="emergency" className="flex-1 text-xs font-mono text-destructive">🚨 Emergency</TabsTrigger>
+                <TabsTrigger value="dashboard" className="flex-1 text-xs font-mono">📊 Dashboard</TabsTrigger>
               </TabsList>
 
               {/* Live Signals Tab */}
