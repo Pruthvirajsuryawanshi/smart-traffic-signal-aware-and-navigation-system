@@ -564,13 +564,17 @@ const Index = () => {
                   elapsedSeconds={emergencyTracking.elapsedSeconds}
                   proofDeadlineRemaining={emergencyTracking.proofDeadlineRemaining}
                   lastCompletedSession={lastCompletedSession}
-                  onStartEmergency={() => {
+                  onStartEmergency={async () => {
                     if (ambulance.status.position) {
+                      const endPoint = ambulance.route.length > 0
+                        ? ambulance.route[ambulance.route.length - 1]
+                        : ambulance.status.position;
+                      const hospitalName = await getHospitalName(endPoint.lat, endPoint.lon ?? (endPoint as any).lng);
                       emergencyTracking.startEmergency(
                         'DRV-' + Date.now(),
                         'Driver',
                         'AMB-001',
-                        'City Hospital',
+                        hospitalName,
                         { lat: ambulance.status.position.lat, lng: ambulance.status.position.lon }
                       );
                     }
