@@ -103,21 +103,21 @@ export interface EmergencyProof {
   submittedAt?: string;
   status: ProofStatus;
   
-  // Patient Information
-  patientName: string;
+  // Patient Information (optional - fetched by admin)
+  patientName?: string;
   patientAge?: number;
   patientGender?: 'MALE' | 'FEMALE' | 'OTHER';
   
   // Hospital Information
-  hospitalName: string;
+  hospitalName?: string;
   hospitalLocation?: {
     lat: number;
     lng: number;
   };
-  admissionTime: string;
+  admissionTime?: string;
   
   // Emergency Details
-  emergencyType: EmergencyType;
+  emergencyType?: EmergencyType;
   emergencyDescription?: string;
   
   // Documents

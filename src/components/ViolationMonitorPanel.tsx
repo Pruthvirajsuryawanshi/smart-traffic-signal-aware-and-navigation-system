@@ -1,64 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { RuleViolation, ViolationStatus, ViolationType, DashboardStats, AdminAlert } from '@/types/emergency-validation';
-
-// Mock data for demonstration
-const MOCK_VIOLATIONS: RuleViolation[] = [
-  {
-    id: 'VIO-001',
-    ambulanceId: 'AMB-MH-12-1234',
-    driverId: 'DRV-001',
-    driverName: 'John Smith',
-    vehicleNumber: 'MH-12-1234',
-    type: 'SIGNAL_BREAK',
-    timestamp: new Date(Date.now() - 3600000).toISOString(),
-    location: { lat: 19.837, lng: 75.253 },
-    speedAtViolation: 45,
-    speedLimit: 50,
-    signalId: 'SIG-101',
-    signalState: 'RED',
-    emergencyModeActive: true,
-    status: 'CONDITIONAL_PENDING',
-    emergencySessionId: 'EMG-001',
-  },
-  {
-    id: 'VIO-002',
-    ambulanceId: 'AMB-MH-12-5678',
-    driverId: 'DRV-002',
-    driverName: 'Jane Doe',
-    vehicleNumber: 'MH-12-5678',
-    type: 'OVERSPEED',
-    timestamp: new Date(Date.now() - 7200000).toISOString(),
-    location: { lat: 19.838, lng: 75.246 },
-    speedAtViolation: 85,
-    speedLimit: 50,
-    signalId: 'SIG-201',
-    signalState: 'GREEN',
-    emergencyModeActive: false,
-    status: 'PENDING',
-  },
-];
-
-const MOCK_ALERTS: AdminAlert[] = [
-  {
-    id: 'ALT-001',
-    type: 'NO_PROOF_SUBMITTED',
-    message: 'Emergency session EMG-001 has no proof submitted after 8 hours',
-    timestamp: new Date().toISOString(),
-    relatedEntityId: 'EMG-001',
-    entityType: 'EMERGENCY_SESSION',
-    isRead: false,
-    isResolved: false,
-  },
-];
-
-const MOCK_STATS: DashboardStats = {
-  activeEmergencySessions: 2,
-  pendingProofs: 5,
-  unverifiedCases: 8,
-  misuseDetected: 3,
-  todayViolations: 12,
-  totalAmbulancesActive: 15,
-};
+import { generateViolationReport } from '@/lib/violation-report';
 
 interface ViolationMonitorPanelProps {
   violations?: RuleViolation[];
@@ -110,9 +52,9 @@ function formatTimeAgo(timestamp: string): string {
 }
 
 export default function ViolationMonitorPanel({
-  violations = MOCK_VIOLATIONS,
-  alerts = MOCK_ALERTS,
-  stats = MOCK_STATS,
+  violations = [],
+  alerts = [],
+  stats,
   onUpdateStatus,
   onViewDetails,
 }: ViolationMonitorPanelProps) {
@@ -131,6 +73,30 @@ export default function ViolationMonitorPanel({
     : violations.filter(v => v.status === filter);
 
   const unreadAlerts = alerts.filter(a => !a.isRead);
+
+  const displayStats = stats || {
+    activeEmergencySessions: 0,
+    pendingProofs: 0,
+    unverifiedCases: 0,
+    misuseDetected: 0,
+    todayViolations: violations.length,
+    totalAmbulancesActive: 0,
+  };
+
+  // Handle report download
+  const handleDownloadReport = () => {
+    try {
+      const filename = generateViolationReport({
+        violations,
+        filter,
+        generatedBy: 'Admin Dashboard',
+      });
+      console.log(`Report downloaded: ${filename}`);
+    } catch (error) {
+      console.error('Failed to generate report:', error);
+      alert('Failed to generate PDF report. Please try again.');
+    }
+  };
 
   return (
     <div className="bg-card rounded-lg border border-border p-3 md:p-4">
@@ -151,37 +117,37 @@ export default function ViolationMonitorPanel({
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
         <div className="bg-signal-red/10 border border-signal-red/30 rounded-lg p-2.5">
           <div className="text-2xl font-bold text-signal-red font-mono">
-            {stats.activeEmergencySessions}
+            {displayStats.activeEmergencySessions}
           </div>
           <div className="text-[10px] font-mono text-muted-foreground">Active Emergencies</div>
         </div>
         <div className="bg-signal-yellow/10 border border-signal-yellow/30 rounded-lg p-2.5">
           <div className="text-2xl font-bold text-signal-yellow font-mono">
-            {stats.pendingProofs}
+            {displayStats.pendingProofs}
           </div>
           <div className="text-[10px] font-mono text-muted-foreground">Pending Proofs</div>
         </div>
         <div className="bg-primary/10 border border-primary/30 rounded-lg p-2.5">
           <div className="text-2xl font-bold text-primary font-mono">
-            {stats.unverifiedCases}
+            {displayStats.unverifiedCases}
           </div>
           <div className="text-[10px] font-mono text-muted-foreground">Unverified Cases</div>
         </div>
         <div className="bg-signal-green/10 border border-signal-green/30 rounded-lg p-2.5">
           <div className="text-2xl font-bold text-signal-green font-mono">
-            {stats.totalAmbulancesActive}
+            {displayStats.totalAmbulancesActive}
           </div>
           <div className="text-[10px] font-mono text-muted-foreground">Active Ambulances</div>
         </div>
         <div className="bg-secondary/50 border border-border rounded-lg p-2.5">
           <div className="text-2xl font-bold text-foreground font-mono">
-            {stats.todayViolations}
+            {displayStats.todayViolations}
           </div>
           <div className="text-[10px] font-mono text-muted-foreground">Today's Violations</div>
         </div>
         <div className="bg-signal-red/10 border border-signal-red/30 rounded-lg p-2.5">
           <div className="text-2xl font-bold text-signal-red font-mono">
-            {stats.misuseDetected}
+            {displayStats.misuseDetected}
           </div>
           <div className="text-[10px] font-mono text-muted-foreground">Misuse Detected</div>
         </div>
@@ -289,28 +255,115 @@ export default function ViolationMonitorPanel({
         {/* Selected Violation Details */}
         {selectedViolation && (
           <div className="mt-3 p-3 bg-secondary/30 rounded-lg border border-border">
-            <h4 className="text-xs font-mono font-bold text-foreground mb-2">
-              Violation Details
+            <h4 className="text-xs font-mono font-bold text-foreground mb-3 flex items-center gap-2">
+              {TYPE_ICONS[selectedViolation.type]} Violation Details
             </h4>
-            <div className="grid grid-cols-2 gap-2 text-[10px] font-mono mb-3">
-              <div>
-                <span className="text-muted-foreground">ID:</span>
-                <span className="text-foreground ml-1">{selectedViolation.id}</span>
+            
+            {/* Driver & Vehicle Info */}
+            <div className="space-y-2 mb-3">
+              <div className="bg-background/50 rounded p-2">
+                <span className="text-[9px] font-mono text-muted-foreground block mb-1">Driver Information</span>
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                  <div>
+                    <span className="text-muted-foreground">Name:</span>
+                    <span className="text-foreground font-semibold ml-1">{selectedViolation.driverName}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">ID:</span>
+                    <span className="text-foreground ml-1">{selectedViolation.driverId}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Vehicle:</span>
+                    <span className="text-foreground font-semibold ml-1">{selectedViolation.vehicleNumber}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Ambulance:</span>
+                    <span className="text-foreground ml-1">{selectedViolation.ambulanceId}</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <span className="text-muted-foreground">Driver:</span>
-                <span className="text-foreground ml-1">{selectedViolation.driverName}</span>
+
+              {/* Violation Details */}
+              <div className="bg-background/50 rounded p-2">
+                <span className="text-[9px] font-mono text-muted-foreground block mb-1">Violation Information</span>
+                <div className="space-y-1.5 text-[10px] font-mono">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-muted-foreground">Type:</span>
+                      <span className="text-foreground font-bold ml-1">{TYPE_LABELS[selectedViolation.type]}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Status:</span>
+                      <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${STATUS_COLORS[selectedViolation.status]}`}>
+                        {selectedViolation.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-muted-foreground">Speed:</span>
+                      <span className={`font-bold ml-1 ${selectedViolation.speedAtViolation > selectedViolation.speedLimit ? 'text-signal-red' : 'text-foreground'}`}>
+                        {selectedViolation.speedAtViolation} km/h
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Limit:</span>
+                      <span className="text-foreground font-bold ml-1">{selectedViolation.speedLimit} km/h</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Exceeded by:</span>
+                    <span className="text-signal-red font-bold ml-1">
+                      {selectedViolation.speedAtViolation - selectedViolation.speedLimit} km/h
+                    </span>
+                  </div>
+                  {selectedViolation.emergencyModeActive && (
+                    <div className="px-2 py-1 rounded bg-signal-red/20 text-signal-red text-[9px] font-bold">
+                      ⚠️ EMERGENCY MODE ACTIVE
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <span className="text-muted-foreground">Location:</span>
-                <span className="text-foreground ml-1">
-                  {selectedViolation.location.lat.toFixed(4)}, {selectedViolation.location.lng.toFixed(4)}
-                </span>
+
+              {/* Location & Time */}
+              <div className="bg-background/50 rounded p-2">
+                <span className="text-[9px] font-mono text-muted-foreground block mb-1">Location & Time</span>
+                <div className="space-y-1 text-[10px] font-mono">
+                  <div>
+                    <span className="text-muted-foreground">Coordinates:</span>
+                    <div className="text-foreground ml-1">
+                      {selectedViolation.location.lat.toFixed(6)}°N, {selectedViolation.location.lng.toFixed(6)}°E
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Timestamp:</span>
+                    <div className="text-foreground ml-1">{new Date(selectedViolation.timestamp).toLocaleString()}</div>
+                  </div>
+                  {selectedViolation.signalId && (
+                    <div>
+                      <span className="text-muted-foreground">Near Signal:</span>
+                      <span className="text-foreground ml-1">{selectedViolation.signalId}</span>
+                      {selectedViolation.signalState && (
+                        <span className="text-muted-foreground ml-1">({selectedViolation.signalState})</span>
+                      )}
+                    </div>
+                  )}
+                  {selectedViolation.emergencySessionId && (
+                    <div>
+                      <span className="text-muted-foreground">Emergency Session:</span>
+                      <span className="text-foreground ml-1">{selectedViolation.emergencySessionId}</span>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <span className="text-muted-foreground">Time:</span>
-                <span className="text-foreground ml-1">{formatTime(selectedViolation.timestamp)}</span>
-              </div>
+
+              {/* Notes */}
+              {selectedViolation.notes && (
+                <div className="bg-primary/5 border border-primary/20 rounded p-2">
+                  <span className="text-[9px] font-mono text-muted-foreground block mb-1">Notes</span>
+                  <p className="text-[10px] font-mono text-foreground">{selectedViolation.notes}</p>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -327,12 +380,6 @@ export default function ViolationMonitorPanel({
               >
                 ❌ Mark Misuse
               </button>
-              <button
-                onClick={() => onViewDetails?.(selectedViolation)}
-                className="px-3 py-1.5 rounded-md text-[10px] font-mono font-semibold bg-secondary text-secondary-foreground hover:bg-muted transition-colors"
-              >
-                View Map
-              </button>
             </div>
           </div>
         )}
@@ -341,8 +388,11 @@ export default function ViolationMonitorPanel({
       {/* Footer */}
       <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-[9px] font-mono text-muted-foreground">
         <span>Last updated: {new Date().toLocaleTimeString()}</span>
-        <button className="text-primary hover:text-primary/80">
-          Download Report
+        <button 
+          onClick={handleDownloadReport}
+          className="text-primary hover:text-primary/80 font-semibold flex items-center gap-1"
+        >
+          📥 Download Report
         </button>
       </div>
     </div>

@@ -16,6 +16,7 @@ const STORAGE_KEYS = {
   ACTIVE_SESSION: 'emergency_active_session',
   SESSIONS: 'emergency_sessions',
   PENDING_PROOFS: 'pending_proofs',
+  SUBMITTED_PROOFS: 'submitted_proofs',
 };
 
 export interface EmergencyTrackingState {
@@ -42,6 +43,12 @@ export interface EmergencyTrackingActions {
   addRoutePoint: (point: Omit<EmergencyRoutePoint, 'timestamp'>) => void;
   /** Record a signal crossing */
   recordSignalCrossing: (signalId: string, signalState: 'GREEN' | 'YELLOW' | 'RED') => void;
+  /** Submit proof for completed session */
+  submitProof: (proof: Omit<import('@/types/emergency-validation').EmergencyProof, 'id' | 'submittedAt' | 'status'>) => void;
+  /** Get all submitted proofs (for admin dashboard) */
+  getSubmittedProofs: () => import('@/types/emergency-validation').EmergencyProof[];
+  /** Check if proof was submitted for the last completed session */
+  isProofSubmittedForLastSession: () => boolean;
   /** Load sessions from storage */
   loadSessions: () => void;
   /** Clear error */
@@ -339,6 +346,58 @@ export function useEmergencyTracking(): UseEmergencyTracking {
     setError(null);
   }, []);
 
+  // Submit proof for a completed session
+  const submitProof = useCallback((proof: Omit<import('@/types/emergency-validation').EmergencyProof, 'id' | 'submittedAt' | 'status'>) => {
+    const submittedProofs = JSON.parse(localStorage.getItem(STORAGE_KEYS.SUBMITTED_PROOFS) || '[]');
+    
+    // Add proof with status and timestamp
+    const proofWithMetadata: import('@/types/emergency-validation').EmergencyProof = {
+      ...proof,
+      id: `PRF-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      submittedAt: new Date().toISOString(),
+      status: 'PENDING',
+    };
+    
+    submittedProofs.push(proofWithMetadata);
+    localStorage.setItem(STORAGE_KEYS.SUBMITTED_PROOFS, JSON.stringify(submittedProofs));
+    
+    // Update pending proofs status
+    const pendingProofs = JSON.parse(localStorage.getItem(STORAGE_KEYS.PENDING_PROOFS) || '[]');
+    const proofIndex = pendingProofs.findIndex((p: { sessionId: string }) => p.sessionId === proof.emergencySessionId);
+    if (proofIndex >= 0) {
+      pendingProofs[proofIndex].proofSubmitted = true;
+      pendingProofs[proofIndex].status = 'PENDING';
+      localStorage.setItem(STORAGE_KEYS.PENDING_PROOFS, JSON.stringify(pendingProofs));
+    }
+    
+    console.log('[EmergencyTracking] Proof submitted:', proofWithMetadata.id);
+  }, []);
+
+  // Get all submitted proofs
+  const getSubmittedProofs = useCallback((): import('@/types/emergency-validation').EmergencyProof[] => {
+    const submittedProofs = JSON.parse(localStorage.getItem(STORAGE_KEYS.SUBMITTED_PROOFS) || '[]');
+    
+    // Match proofs with their sessions
+    return submittedProofs.map((proof: any) => {
+      const session = sessions.find(s => s.id === proof.emergencySessionId);
+      return {
+        ...proof,
+        session: session || null,
+      };
+    });
+  }, [sessions]);
+
+  // Check if proof was submitted for the last completed session
+  const isProofSubmittedForLastSession = useCallback((): boolean => {
+    if (sessions.length === 0) return false;
+    
+    const lastSession = sessions[sessions.length - 1];
+    if (!lastSession || lastSession.status !== 'COMPLETED') return false;
+    
+    const submittedProofs = JSON.parse(localStorage.getItem(STORAGE_KEYS.SUBMITTED_PROOFS) || '[]');
+    return submittedProofs.some((proof: any) => proof.emergencySessionId === lastSession.id);
+  }, [sessions]);
+
   // Load sessions on mount
   useEffect(() => {
     loadSessions();
@@ -363,6 +422,9 @@ export function useEmergencyTracking(): UseEmergencyTracking {
     endEmergency,
     addRoutePoint,
     recordSignalCrossing,
+    submitProof,
+    getSubmittedProofs,
+    isProofSubmittedForLastSession,
     loadSessions,
     clearError,
   };

@@ -189,12 +189,15 @@ export function useViolationDetection(
       // =====================
       // OVERSPEED DETECTION
       // =====================
-      if (detectOverspeed && nearbySignal) {
-        const speedLimit = SPEED_LIMIT_BY_TYPE[nearbySignal.type || 'default'] || 50;
+      if (detectOverspeed) {
+        // Use nearby signal type if available, otherwise use default
+        const speedLimit = nearbySignal 
+          ? (SPEED_LIMIT_BY_TYPE[nearbySignal.type || 'default'] || 50)
+          : 50; // Default 50 km/h for general roads
         const threshold = speedLimit * (1 + speedTolerancePercent / 100);
         
         if (speed > threshold) {
-          const violationKey = `speed-${nearbySignal.id}-${Math.floor(speed / 10)}-${Math.floor(Date.now() / 10000)}`;
+          const violationKey = `speed-${nearbySignal?.id || 'general'}-${Math.floor(speed / 10)}-${Math.floor(Date.now() / 10000)}`;
           
           if (!recentViolationsRef.current.has(violationKey)) {
             recentViolationsRef.current.add(violationKey);
@@ -210,11 +213,14 @@ export function useViolationDetection(
               location: position,
               speedAtViolation: speed,
               speedLimit,
-              signalId: nearbySignal.id,
-              signalState,
+              signalId: nearbySignal?.id,
+              signalState: nearbySignal ? signalState : undefined,
               emergencyModeActive,
               status: emergencyModeActive ? 'CONDITIONAL_PENDING' : 'PENDING',
               emergencySessionId,
+              notes: nearbySignal 
+                ? `Overspeed near signal ${nearbySignal.id} (${nearbySignal.type} road)`
+                : `Overspeed on general road (limit: ${speedLimit} km/h)`,
             };
 
             // Prioritize signal break over overspeed if both occur
@@ -226,6 +232,7 @@ export function useViolationDetection(
               speed,
               limit: speedLimit,
               threshold,
+              nearSignal: nearbySignal?.id || 'none',
               emergencyMode: emergencyModeActive,
             });
           }

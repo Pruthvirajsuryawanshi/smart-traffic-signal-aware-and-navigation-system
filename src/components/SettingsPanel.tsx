@@ -5,7 +5,7 @@ import AdminAuthCard from './AdminAuthCard';
 import AdminPanel from './AdminPanel';
 import ViolationMonitorPanel from './ViolationMonitorPanel';
 import EmergencyValidationPanel from './EmergencyValidationPanel';
-import type { RuleViolation, ViolationStatus } from '@/types/emergency-validation';
+import type { RuleViolation, ViolationStatus, EmergencyProof, EmergencySession } from '@/types/emergency-validation';
 import type { TrafficSignal, SignalState, SignalRuntime } from '@/types/signal';
 
 export type SignalConfig = {
@@ -157,6 +157,18 @@ interface SettingsPanelProps {
   // Dashboard props
   violations?: RuleViolation[];
   onUpdateViolationStatus?: (id: string, status: ViolationStatus) => void;
+  // Emergency proofs for admin validation
+  submittedProofs?: (EmergencyProof & { session: EmergencySession | null })[];
+  onProofStatusUpdate?: () => void;
+  // Dashboard statistics
+  dashboardStats?: {
+    activeEmergencySessions: number;
+    pendingProofs: number;
+    unverifiedCases: number;
+    misuseDetected: number;
+    todayViolations: number;
+    totalAmbulancesActive: number;
+  };
 }
 
 export default function SettingsPanel({
@@ -187,6 +199,9 @@ export default function SettingsPanel({
   emergencyActiveSignal,
   violations,
   onUpdateViolationStatus,
+  submittedProofs = [],
+  onProofStatusUpdate,
+  dashboardStats,
 }: SettingsPanelProps) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -899,14 +914,29 @@ export default function SettingsPanel({
                     <ViolationMonitorPanel
                       violations={violations}
                       onUpdateStatus={onUpdateViolationStatus}
+                      stats={dashboardStats}
                     />
                   ) : (
                     <ViolationMonitorPanel
                       violations={[]}
                       onUpdateStatus={() => {}}
+                      stats={dashboardStats}
                     />
                   )}
-                  <EmergencyValidationPanel />
+                  <EmergencyValidationPanel 
+                    proofs={submittedProofs}
+                    onApprove={(proofId, adminNotes) => {
+                      console.log('Proof approved:', proofId, adminNotes);
+                      onProofStatusUpdate?.();
+                    }}
+                    onReject={(proofId, reason, adminNotes) => {
+                      console.log('Proof rejected:', proofId, reason, adminNotes);
+                      onProofStatusUpdate?.();
+                    }}
+                    onStatusUpdate={() => {
+                      onProofStatusUpdate?.();
+                    }}
+                  />
                 </div>
               </TabsContent>
             </Tabs>

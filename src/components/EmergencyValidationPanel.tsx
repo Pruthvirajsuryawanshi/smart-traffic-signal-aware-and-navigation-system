@@ -8,84 +8,13 @@ import type {
   RouteMatchResult 
 } from '@/types/emergency-validation';
 
-// Mock data for demonstration
-const MOCK_PROOFS: (EmergencyProof & { session: EmergencySession })[] = [
-  {
-    id: 'PRF-001',
-    emergencySessionId: 'EMG-001',
-    ambulanceId: 'AMB-MH-12-1234',
-    driverId: 'DRV-001',
-    driverName: 'John Smith',
-    vehicleNumber: 'MH-12-1234',
-    status: 'PENDING',
-    patientName: 'Patient A',
-    patientAge: 45,
-    patientGender: 'MALE',
-    hospitalName: 'City Hospital',
-    admissionTime: new Date(Date.now() - 3600000).toISOString(),
-    emergencyType: 'CARDIAC',
-    emergencyDescription: 'Severe chest pain, suspected heart attack',
-    proofDeadline: new Date(Date.now() + 3600000).toISOString(),
-    submittedWithinDeadline: true,
-    session: {
-      id: 'EMG-001',
-      ambulanceId: 'AMB-MH-12-1234',
-      driverId: 'DRV-001',
-      driverName: 'John Smith',
-      vehicleNumber: 'MH-12-1234',
-      hospitalName: 'City Hospital',
-      startTime: new Date(Date.now() - 7200000).toISOString(),
-      endTime: new Date(Date.now() - 3600000).toISOString(),
-      status: 'COMPLETED',
-      startLocation: { lat: 19.837, lng: 75.253 },
-      endLocation: { lat: 19.845, lng: 75.260 },
-      route: [],
-      signalsCrossed: ['SIG-101', 'SIG-201'],
-      distanceTraveledKm: 5.2,
-      maxSpeedKmh: 78,
-      averageSpeedKmh: 45,
-    },
-  },
-  {
-    id: 'PRF-002',
-    emergencySessionId: 'EMG-002',
-    ambulanceId: 'AMB-MH-12-5678',
-    driverId: 'DRV-002',
-    driverName: 'Jane Doe',
-    vehicleNumber: 'MH-12-5678',
-    status: 'EXPIRED',
-    patientName: '',
-    hospitalName: '',
-    admissionTime: '',
-    emergencyType: 'OTHER',
-    proofDeadline: new Date(Date.now() - 3600000).toISOString(),
-    submittedWithinDeadline: false,
-    session: {
-      id: 'EMG-002',
-      ambulanceId: 'AMB-MH-12-5678',
-      driverId: 'DRV-002',
-      driverName: 'Jane Doe',
-      vehicleNumber: 'MH-12-5678',
-      hospitalName: 'General Hospital',
-      startTime: new Date(Date.now() - 86400000).toISOString(),
-      endTime: new Date(Date.now() - 82800000).toISOString(),
-      status: 'COMPLETED',
-      startLocation: { lat: 19.840, lng: 75.248 },
-      endLocation: { lat: 19.850, lng: 75.255 },
-      route: [],
-      signalsCrossed: ['SIG-102'],
-      distanceTraveledKm: 3.1,
-      maxSpeedKmh: 65,
-      averageSpeedKmh: 40,
-    },
-  },
-];
-
 interface EmergencyValidationPanelProps {
-  proofs?: (EmergencyProof & { session: EmergencySession })[];
+  proofs?: (EmergencyProof & { session: EmergencySession | null })[];
   onApprove?: (proofId: string, adminNotes?: string) => void;
   onReject?: (proofId: string, rejectionReason: string, adminNotes?: string) => void;
   onViewRoute?: (session: EmergencySession) => void;
+  /** Callback when proof status is updated */
+  onStatusUpdate?: (proofId: string, status: ProofStatus) => void;
 }
 
 const STATUS_COLORS: Record<ProofStatus, string> = {
@@ -137,12 +66,14 @@ function performSmartValidation(proof: EmergencyProof, session: EmergencySession
     confidence -= 20;
   }
 
-  // Check if hospital matches
-  if (proof.hospitalName.toLowerCase().includes(session.hospitalName.toLowerCase())) {
-    confidence += 15;
-  } else {
-    flags.push('Hospital name mismatch');
-    recommendations.push('Verify hospital destination');
+  // Check if hospital matches (if both exist)
+  if (proof.hospitalName && session.hospitalName) {
+    if (proof.hospitalName.toLowerCase().includes(session.hospitalName.toLowerCase())) {
+      confidence += 15;
+    } else {
+      flags.push('Hospital name mismatch');
+      recommendations.push('Verify hospital destination');
+    }
   }
 
   // Check if route makes sense
@@ -175,10 +106,11 @@ function performSmartValidation(proof: EmergencyProof, session: EmergencySession
 }
 
 export default function EmergencyValidationPanel({
-  proofs = MOCK_PROOFS,
+  proofs = [],
   onApprove,
   onReject,
   onViewRoute,
+  onStatusUpdate,
 }: EmergencyValidationPanelProps) {
   const [filter, setFilter] = useState<'all' | ProofStatus>('all');
   const [selectedProof, setSelectedProof] = useState<(EmergencyProof & { session: EmergencySession }) | null>(null);
@@ -190,19 +122,54 @@ export default function EmergencyValidationPanel({
 
   const handleApprove = () => {
     if (selectedProof) {
+      // Update proof status in localStorage
+      const submittedProofs = JSON.parse(localStorage.getItem('submitted_proofs') || '[]');
+      const proofIndex = submittedProofs.findIndex((p: any) => p.id === selectedProof.id);
+      if (proofIndex >= 0) {
+        submittedProofs[proofIndex].status = 'APPROVED';
+        submittedProofs[proofIndex].reviewedBy = 'admin';
+        submittedProofs[proofIndex].reviewedAt = new Date().toISOString();
+        submittedProofs[proofIndex].adminNotes = adminNotes;
+        localStorage.setItem('submitted_proofs', JSON.stringify(submittedProofs));
+      }
+
+      // Notify parent component
+      onStatusUpdate?.(selectedProof.id, 'APPROVED');
       onApprove?.(selectedProof.id, adminNotes);
+      
+      // Clear selection
       setSelectedProof(null);
       setAdminNotes('');
+      
+      console.log('[EmergencyValidation] Proof approved:', selectedProof.id);
     }
   };
 
   const handleReject = () => {
     if (selectedProof && rejectionReason.trim()) {
+      // Update proof status in localStorage
+      const submittedProofs = JSON.parse(localStorage.getItem('submitted_proofs') || '[]');
+      const proofIndex = submittedProofs.findIndex((p: any) => p.id === selectedProof.id);
+      if (proofIndex >= 0) {
+        submittedProofs[proofIndex].status = 'REJECTED';
+        submittedProofs[proofIndex].reviewedBy = 'admin';
+        submittedProofs[proofIndex].reviewedAt = new Date().toISOString();
+        submittedProofs[proofIndex].rejectionReason = rejectionReason;
+        submittedProofs[proofIndex].adminNotes = adminNotes;
+        localStorage.setItem('submitted_proofs', JSON.stringify(submittedProofs));
+      }
+
+      // Notify parent component
+      onStatusUpdate?.(selectedProof.id, 'REJECTED');
       onReject?.(selectedProof.id, rejectionReason, adminNotes);
+      
+      // Clear selection
       setSelectedProof(null);
       setRejectionReason('');
       setAdminNotes('');
       setShowRejectModal(false);
+      
+      console.log('[EmergencyValidation] Proof rejected:', selectedProof.id);
     }
   };
 
@@ -297,85 +264,228 @@ export default function EmergencyValidationPanel({
       {/* Selected Proof Details */}
       {selectedProof && (
         <div className="mt-4 space-y-3">
+          {/* Session Details */}
           <div className="bg-secondary/30 rounded-lg border border-border p-3">
-            <h4 className="text-xs font-mono font-bold text-foreground mb-3">
-              Session Details
+            <h4 className="text-xs font-mono font-bold text-foreground mb-3 flex items-center gap-2">
+              📊 Session Details
             </h4>
-            <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-              <div>
-                <span className="text-muted-foreground">Session ID:</span>
-                <span className="text-foreground ml-1">{selectedProof.session.id}</span>
+            <div className="space-y-3">
+              {/* Primary Info */}
+              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                <div className="bg-background/50 rounded p-2">
+                  <span className="text-muted-foreground block text-[9px] mb-1">Session ID</span>
+                  <span className="text-foreground font-bold text-[11px]">{selectedProof.session?.id || selectedProof.emergencySessionId}</span>
+                </div>
+                <div className="bg-background/50 rounded p-2">
+                  <span className="text-muted-foreground block text-[9px] mb-1">Status</span>
+                  <span className={`font-bold text-[11px] ${
+                    selectedProof.status === 'APPROVED' ? 'text-signal-green' : 
+                    selectedProof.status === 'REJECTED' ? 'text-signal-red' :
+                    selectedProof.status === 'EXPIRED' ? 'text-muted-foreground' : 'text-signal-yellow'
+                  }`}>
+                    {selectedProof.status}
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="text-muted-foreground">Driver:</span>
-                <span className="text-foreground ml-1">{selectedProof.driverName}</span>
+
+              {/* Driver & Vehicle Info */}
+              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                <div className="bg-background/50 rounded p-2">
+                  <span className="text-muted-foreground block text-[9px] mb-1">Driver Name</span>
+                  <span className="text-foreground font-semibold">{selectedProof.driverName}</span>
+                </div>
+                <div className="bg-background/50 rounded p-2">
+                  <span className="text-muted-foreground block text-[9px] mb-1">Vehicle Number</span>
+                  <span className="text-foreground font-semibold">{selectedProof.vehicleNumber}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-muted-foreground">Vehicle:</span>
-                <span className="text-foreground ml-1">{selectedProof.vehicleNumber}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Duration:</span>
-                <span className="text-foreground ml-1">
-                  {formatDuration(selectedProof.session.startTime, selectedProof.session.endTime)}
-                </span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Distance:</span>
-                <span className="text-foreground ml-1">{selectedProof.session.distanceTraveledKm.toFixed(1)} km</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Max Speed:</span>
-                <span className="text-foreground ml-1">{selectedProof.session.maxSpeedKmh} km/h</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Signals:</span>
-                <span className="text-foreground ml-1">{selectedProof.session.signalsCrossed.length} crossed</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Hospital:</span>
-                <span className="text-foreground ml-1">{selectedProof.session.hospitalName}</span>
-              </div>
+
+              {/* Session Timing */}
+              {selectedProof.session && (
+                <div className="bg-background/50 rounded p-2 text-[10px] font-mono">
+                  <span className="text-muted-foreground block text-[9px] mb-2">Session Timeline</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-muted-foreground text-[9px]">Start:</span>
+                      <div className="text-foreground font-semibold">{new Date(selectedProof.session.startTime).toLocaleString()}</div>
+                    </div>
+                    {selectedProof.session.endTime && (
+                      <div>
+                        <span className="text-muted-foreground text-[9px]">End:</span>
+                        <div className="text-foreground font-semibold">{new Date(selectedProof.session.endTime).toLocaleString()}</div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-border">
+                    <span className="text-muted-foreground text-[9px]">Duration:</span>
+                    <span className="text-foreground font-bold ml-1">
+                      {formatDuration(selectedProof.session.startTime, selectedProof.session.endTime)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Route & Performance Data */}
+              {selectedProof.session && (
+                <div className="grid grid-cols-3 gap-2 text-[10px] font-mono">
+                  <div className="bg-background/50 rounded p-2">
+                    <span className="text-muted-foreground block text-[9px] mb-1">Distance</span>
+                    <span className="text-foreground font-bold text-sm">{selectedProof.session.distanceTraveledKm.toFixed(2)} km</span>
+                  </div>
+                  <div className="bg-background/50 rounded p-2">
+                    <span className="text-muted-foreground block text-[9px] mb-1">Max Speed</span>
+                    <span className={`font-bold text-sm ${
+                      selectedProof.session.maxSpeedKmh > 100 ? 'text-signal-red' : 'text-foreground'
+                    }`}>
+                      {selectedProof.session.maxSpeedKmh} km/h
+                    </span>
+                  </div>
+                  <div className="bg-background/50 rounded p-2">
+                    <span className="text-muted-foreground block text-[9px] mb-1">Avg Speed</span>
+                    <span className="text-foreground font-bold text-sm">{selectedProof.session.averageSpeedKmh} km/h</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Signals Crossed */}
+              {selectedProof.session && selectedProof.session.signalsCrossed.length > 0 && (
+                <div className="bg-background/50 rounded p-2 text-[10px] font-mono">
+                  <span className="text-muted-foreground block text-[9px] mb-2">Signals Crossed ({selectedProof.session.signalsCrossed.length})</span>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedProof.session.signalsCrossed.map((signalId, idx) => (
+                      <span key={idx} className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[9px] font-bold">
+                        {signalId}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Hospital Destination */}
+              {selectedProof.session?.hospitalName && (
+                <div className="bg-background/50 rounded p-2 text-[10px] font-mono">
+                  <span className="text-muted-foreground block text-[9px] mb-1">Destination Hospital</span>
+                  <span className="text-foreground font-semibold">{selectedProof.session.hospitalName}</span>
+                </div>
+              )}
+
+              {/* Proof Submission Time */}
+              {selectedProof.submittedAt && (
+                <div className="bg-background/50 rounded p-2 text-[10px] font-mono">
+                  <span className="text-muted-foreground block text-[9px] mb-1">Proof Submitted At</span>
+                  <span className="text-foreground font-semibold">{new Date(selectedProof.submittedAt).toLocaleString()}</span>
+                  {selectedProof.submittedWithinDeadline && (
+                    <span className="text-signal-green text-[9px] ml-2">✓ Within deadline</span>
+                  )}
+                  {!selectedProof.submittedWithinDeadline && (
+                    <span className="text-signal-red text-[9px] ml-2">✗ Late submission</span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Proof Details (if submitted) */}
-          {selectedProof.status !== 'EXPIRED' && selectedProof.patientName && (
+          {/* Proof Details & Documents */}
+          {selectedProof.status !== 'EXPIRED' && selectedProof.documentUrls && selectedProof.documentUrls.length > 0 && (
             <div className="bg-secondary/30 rounded-lg border border-border p-3">
               <h4 className="text-xs font-mono font-bold text-foreground mb-3">
-                Proof Details
+                📄 Uploaded Documents ({selectedProof.documentUrls.length})
               </h4>
-              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-                <div>
-                  <span className="text-muted-foreground">Patient:</span>
-                  <span className="text-foreground ml-1">{selectedProof.patientName}</span>
+              
+              <div className="space-y-3">
+                {selectedProof.documentUrls.map((docUrl, index) => {
+                  // Detect file type from data URL or filename
+                  const isImage = docUrl.startsWith('data:image/');
+                  const isPDF = docUrl.startsWith('data:application/pdf') || docUrl.includes('.pdf');
+                  
+                  // Extract filename from data URL if possible
+                  let fileName = `Document ${index + 1}`;
+                  if (docUrl.includes('name=')) {
+                    const match = docUrl.match(/name=([^;]+)/);
+                    if (match) fileName = decodeURIComponent(match[1]);
+                  } else if (isImage) {
+                    const mimeMatch = docUrl.match(/data:image\/(\w+)/);
+                    if (mimeMatch) fileName = `image_${index + 1}.${mimeMatch[1]}`;
+                  } else if (isPDF) {
+                    fileName = `document_${index + 1}.pdf`;
+                  }
+                  
+                  return (
+                    <div key={index} className="bg-background/50 rounded-md border border-border overflow-hidden">
+                      {/* Document Header */}
+                      <div className="flex items-center gap-2 p-2 border-b border-border">
+                        <span className="text-lg">
+                          {isImage ? '🖼️' : isPDF ? '📕' : '📄'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] font-mono font-bold text-foreground truncate">
+                            {fileName}
+                          </div>
+                          <div className="text-[9px] font-mono text-muted-foreground">
+                            {isImage ? 'Image' : isPDF ? 'PDF Document' : 'File'} • Document {index + 1}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Image Preview */}
+                      {isImage && (
+                        <div className="p-2">
+                          <div className="rounded-md overflow-hidden border border-border bg-muted">
+                            <img 
+                              src={docUrl} 
+                              alt={`Document ${index + 1}`}
+                              className="w-full h-auto max-h-96 object-contain"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* PDF Preview */}
+                      {isPDF && (
+                        <div className="p-2">
+                          <div className="rounded-md overflow-hidden border border-border" style={{ height: '500px' }}>
+                            <iframe
+                              src={docUrl}
+                              className="w-full h-full"
+                              title={`PDF Document ${index + 1}`}
+                              style={{ border: 'none' }}
+                            />
+                          </div>
+                          <div className="mt-2 text-center">
+                            <a
+                              href={docUrl}
+                              download={fileName}
+                              className="text-[10px] font-mono text-primary hover:underline"
+                            >
+                              📥 Download PDF
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Unknown file type */}
+                      {!isImage && !isPDF && (
+                        <div className="p-4 text-center text-[10px] font-mono text-muted-foreground">
+                          <div className="text-2xl mb-2">📄</div>
+                          <div>File preview not available</div>
+                          <a
+                            href={docUrl}
+                            download={fileName}
+                            className="text-primary hover:underline mt-2 inline-block"
+                          >
+                            📥 Download File
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              
+              <div className="mt-3 bg-primary/5 border border-primary/20 rounded-md p-2">
+                <div className="text-[9px] font-mono text-muted-foreground">
+                  <span className="text-primary font-bold">ℹ️ Admin Note:</span> Verify these documents match the emergency session details below. Check dates, hospital names, and patient information for consistency.
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Age/Gender:</span>
-                  <span className="text-foreground ml-1">
-                    {selectedProof.patientAge || '-'} / {selectedProof.patientGender || '-'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Hospital:</span>
-                  <span className="text-foreground ml-1">{selectedProof.hospitalName}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Admission:</span>
-                  <span className="text-foreground ml-1">{formatDateTime(selectedProof.admissionTime)}</span>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-muted-foreground">Type:</span>
-                  <span className="text-foreground ml-1">
-                    {EMERGENCY_TYPE_ICONS[selectedProof.emergencyType]} {selectedProof.emergencyType}
-                  </span>
-                </div>
-                {selectedProof.emergencyDescription && (
-                  <div className="col-span-2">
-                    <span className="text-muted-foreground">Description:</span>
-                    <p className="text-foreground mt-1">{selectedProof.emergencyDescription}</p>
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -436,6 +546,44 @@ export default function EmergencyValidationPanel({
               placeholder="Add notes for this case..."
             />
           </div>
+
+          {/* Review Details (if already reviewed) */}
+          {selectedProof.status === 'APPROVED' && selectedProof.reviewedAt && (
+            <div className="bg-signal-green/10 border border-signal-green/30 rounded-md p-3">
+              <h4 className="text-[10px] font-mono font-bold text-signal-green mb-2">
+                ✅ APPROVED
+              </h4>
+              <div className="text-[10px] font-mono text-muted-foreground space-y-1">
+                <div>Reviewed at: <span className="text-foreground">{new Date(selectedProof.reviewedAt).toLocaleString()}</span></div>
+                {selectedProof.reviewedBy && (
+                  <div>Reviewed by: <span className="text-foreground">{selectedProof.reviewedBy}</span></div>
+                )}
+                {selectedProof.adminNotes && (
+                  <div>Notes: <span className="text-foreground">{selectedProof.adminNotes}</span></div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {selectedProof.status === 'REJECTED' && selectedProof.reviewedAt && (
+            <div className="bg-signal-red/10 border border-signal-red/30 rounded-md p-3">
+              <h4 className="text-[10px] font-mono font-bold text-signal-red mb-2">
+                ❌ REJECTED
+              </h4>
+              <div className="text-[10px] font-mono text-muted-foreground space-y-1">
+                <div>Reviewed at: <span className="text-foreground">{new Date(selectedProof.reviewedAt).toLocaleString()}</span></div>
+                {selectedProof.reviewedBy && (
+                  <div>Reviewed by: <span className="text-foreground">{selectedProof.reviewedBy}</span></div>
+                )}
+                {selectedProof.rejectionReason && (
+                  <div>Reason: <span className="text-signal-red font-semibold">{selectedProof.rejectionReason}</span></div>
+                )}
+                {selectedProof.adminNotes && (
+                  <div>Notes: <span className="text-foreground">{selectedProof.adminNotes}</span></div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons */}
           {selectedProof.status === 'PENDING' && (

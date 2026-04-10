@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import type { EmergencyProof, EmergencyType, EmergencySession } from '@/types/emergency-validation';
+import type { EmergencyProof, EmergencySession } from '@/types/emergency-validation';
 
 interface ProofUploadFormProps {
   /** The emergency session to submit proof for */
@@ -12,16 +12,6 @@ interface ProofUploadFormProps {
   deadlineRemaining?: number;
 }
 
-const EMERGENCY_TYPES: { value: EmergencyType; label: string }[] = [
-  { value: 'CARDIAC', label: '🫀 Cardiac Emergency' },
-  { value: 'ACCIDENT', label: '🚗 Accident/Trauma' },
-  { value: 'STROKE', label: '🧠 Stroke' },
-  { value: 'CHILD_BIRTH', label: '👶 Child Birth' },
-  { value: 'RESPIRATORY', label: '🫁 Respiratory Emergency' },
-  { value: 'TRAUMA', label: '🩹 Severe Trauma' },
-  { value: 'OTHER', label: '📋 Other' },
-];
-
 export default function ProofUploadForm({
   session,
   onSubmit,
@@ -30,14 +20,7 @@ export default function ProofUploadForm({
 }: ProofUploadFormProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   
-  // Form state
-  const [patientName, setPatientName] = useState('');
-  const [patientAge, setPatientAge] = useState('');
-  const [patientGender, setPatientGender] = useState<'MALE' | 'FEMALE' | 'OTHER'>('MALE');
-  const [hospitalName, setHospitalName] = useState(session.hospitalName || '');
-  const [admissionTime, setAdmissionTime] = useState('');
-  const [emergencyType, setEmergencyType] = useState<EmergencyType>('OTHER');
-  const [emergencyDescription, setEmergencyDescription] = useState('');
+  // Form state - simplified to only documents
   const [documentFiles, setDocumentFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -64,13 +47,8 @@ export default function ProofUploadForm({
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!patientName.trim()) newErrors.patientName = 'Patient name is required';
-    if (!hospitalName.trim()) newErrors.hospitalName = 'Hospital name is required';
-    if (!admissionTime) newErrors.admissionTime = 'Admission time is required';
-    
-    // Validate admission time is after emergency start
-    if (admissionTime && new Date(admissionTime) < new Date(session.startTime)) {
-      newErrors.admissionTime = 'Admission time must be after emergency start time';
+    if (documentFiles.length === 0) {
+      newErrors.documents = 'At least one document is required';
     }
 
     setErrors(newErrors);
@@ -82,6 +60,23 @@ export default function ProofUploadForm({
 
     setIsSubmitting(true);
 
+    // Convert files to data URLs for storage and viewing
+    const documentDataUrls: string[] = [];
+    
+    for (const file of documentFiles) {
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        documentDataUrls.push(dataUrl);
+      } catch (error) {
+        console.error('Error reading file:', file.name, error);
+      }
+    }
+
     // Simulate file upload delay
     await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -91,14 +86,11 @@ export default function ProofUploadForm({
       driverId: session.driverId,
       driverName: session.driverName,
       vehicleNumber: session.vehicleNumber,
-      patientName: patientName.trim(),
-      patientAge: patientAge ? parseInt(patientAge) : undefined,
-      patientGender,
-      hospitalName: hospitalName.trim(),
-      admissionTime,
-      emergencyType,
-      emergencyDescription: emergencyDescription.trim() || undefined,
-      documentUrls: documentFiles.map(f => `local://${f.name}`), // In real app, upload to storage
+      patientName: '',
+      hospitalName: session.hospitalName || '',
+      admissionTime: new Date().toISOString(),
+      emergencyType: 'OTHER',
+      documentUrls: documentDataUrls, // Store actual data URLs for viewing
       proofDeadline: new Date(Date.now() + (deadlineRemaining || 0) * 1000).toISOString(),
       submittedWithinDeadline: (deadlineRemaining || 0) > 0,
     };
@@ -137,145 +129,10 @@ export default function ProofUploadForm({
 
         {/* Form */}
         <div className="p-4 space-y-4">
-          {/* Patient Information */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-mono font-bold text-foreground uppercase tracking-wider">
-              Patient Information
-            </h3>
-
-            <div>
-              <label className="block text-[10px] font-mono text-muted-foreground mb-1">
-                Patient Name *
-              </label>
-              <input
-                type="text"
-                value={patientName}
-                onChange={e => setPatientName(e.target.value)}
-                className={`w-full px-3 py-2 rounded-md text-xs font-mono bg-background border ${
-                  errors.patientName ? 'border-signal-red' : 'border-border'
-                } focus:outline-none focus:ring-1 focus:ring-primary`}
-                placeholder="Enter patient name"
-              />
-              {errors.patientName && (
-                <p className="text-[10px] font-mono text-signal-red mt-1">{errors.patientName}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-mono text-muted-foreground mb-1">
-                  Age
-                </label>
-                <input
-                  type="number"
-                  value={patientAge}
-                  onChange={e => setPatientAge(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md text-xs font-mono bg-background border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="Years"
-                  min="0"
-                  max="150"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-mono text-muted-foreground mb-1">
-                  Gender
-                </label>
-                <select
-                  value={patientGender}
-                  onChange={e => setPatientGender(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-md text-xs font-mono bg-background border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="MALE">Male</option>
-                  <option value="FEMALE">Female</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Hospital Information */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-mono font-bold text-foreground uppercase tracking-wider">
-              Hospital Information
-            </h3>
-
-            <div>
-              <label className="block text-[10px] font-mono text-muted-foreground mb-1">
-                Hospital Name *
-              </label>
-              <input
-                type="text"
-                value={hospitalName}
-                onChange={e => setHospitalName(e.target.value)}
-                className={`w-full px-3 py-2 rounded-md text-xs font-mono bg-background border ${
-                  errors.hospitalName ? 'border-signal-red' : 'border-border'
-                } focus:outline-none focus:ring-1 focus:ring-primary`}
-                placeholder="Enter hospital name"
-              />
-              {errors.hospitalName && (
-                <p className="text-[10px] font-mono text-signal-red mt-1">{errors.hospitalName}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-mono text-muted-foreground mb-1">
-                Admission Time *
-              </label>
-              <input
-                type="datetime-local"
-                value={admissionTime}
-                onChange={e => setAdmissionTime(e.target.value)}
-                className={`w-full px-3 py-2 rounded-md text-xs font-mono bg-background border ${
-                  errors.admissionTime ? 'border-signal-red' : 'border-border'
-                } focus:outline-none focus:ring-1 focus:ring-primary`}
-              />
-              {errors.admissionTime && (
-                <p className="text-[10px] font-mono text-signal-red mt-1">{errors.admissionTime}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Emergency Details */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-mono font-bold text-foreground uppercase tracking-wider">
-              Emergency Details
-            </h3>
-
-            <div>
-              <label className="block text-[10px] font-mono text-muted-foreground mb-1">
-                Emergency Type
-              </label>
-              <select
-                value={emergencyType}
-                onChange={e => setEmergencyType(e.target.value as EmergencyType)}
-                className="w-full px-3 py-2 rounded-md text-xs font-mono bg-background border border-border focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                {EMERGENCY_TYPES.map(type => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-mono text-muted-foreground mb-1">
-                Description (Optional)
-              </label>
-              <textarea
-                value={emergencyDescription}
-                onChange={e => setEmergencyDescription(e.target.value)}
-                className="w-full px-3 py-2 rounded-md text-xs font-mono bg-background border border-border focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                rows={3}
-                placeholder="Brief description of the emergency..."
-              />
-            </div>
-          </div>
-
           {/* Document Upload */}
           <div className="space-y-3">
             <h3 className="text-xs font-mono font-bold text-foreground uppercase tracking-wider">
-              Supporting Documents
+              Supporting Documents *
             </h3>
 
             <input
@@ -296,6 +153,10 @@ export default function ProofUploadForm({
                 (Prescription, Report, Images, PDF)
               </span>
             </button>
+
+            {errors.documents && (
+              <p className="text-[10px] font-mono text-signal-red">{errors.documents}</p>
+            )}
 
             {documentFiles.length > 0 && (
               <div className="space-y-1">

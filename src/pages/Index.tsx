@@ -55,6 +55,82 @@ const Index = () => {
   // State for proof upload modal
   const [showProofUpload, setShowProofUpload] = useState(false);
   const [lastCompletedSession, setLastCompletedSession] = useState<any>(null);
+  const [proofRefreshKey, setProofRefreshKey] = useState(0); // Force refresh on status change
+  
+  // Get submitted proofs for admin dashboard (with session data)
+  const submittedProofs = emergencyTracking.getSubmittedProofs().map(proof => ({
+    ...proof,
+    session: emergencyTracking.sessions.find(s => s.id === proof.emergencySessionId) || null,
+  }));
+  
+  // Handler for proof status updates (triggers refresh)
+  const handleProofStatusUpdate = () => {
+    setProofRefreshKey(prev => prev + 1);
+  };
+  
+  // Calculate real dashboard statistics
+  const dashboardStats = {
+    activeEmergencySessions: emergencyTracking.isActive ? 1 : 0,
+    pendingProofs: submittedProofs.filter(p => p.status === 'PENDING').length,
+    unverifiedCases: submittedProofs.filter(p => p.status === 'PENDING').length,
+    misuseDetected: submittedProofs.filter(p => p.status === 'REJECTED' || p.status === 'EXPIRED').length,
+    todayViolations: violationDetection.violations.filter(v => {
+      const today = new Date().toDateString();
+      return new Date(v.timestamp).toDateString() === today;
+    }).length,
+    // Count unique active ambulances (completed sessions today + currently active)
+    totalAmbulancesActive: (() => {
+      const today = new Date().toDateString();
+      const todaySessions = emergencyTracking.sessions.filter(s => {
+        const sessionDate = new Date(s.startTime).toDateString();
+        return sessionDate === today && s.status === 'COMPLETED';
+      });
+      // Count unique vehicles
+      const uniqueVehicles = new Set(todaySessions.map(s => s.vehicleNumber));
+      // Add current active emergency if exists
+      if (emergencyTracking.isActive && emergencyTracking.activeSession) {
+        uniqueVehicles.add(emergencyTracking.activeSession.vehicleNumber);
+      }
+      return uniqueVehicles.size;
+    })(),
+  };
+  
+  // Auto-track route points and detect violations during emergency
+  useEffect(() => {
+    if (!emergencyTracking.isActive || !ambulance.status.position) return;
+    
+    // Add route point and check for violations every 2 seconds
+    const trackInterval = setInterval(() => {
+      if (ambulance.status.position) {
+        // Track route point
+        emergencyTracking.addRoutePoint({
+          lat: ambulance.status.position.lat,
+          lng: ambulance.status.position.lon,
+          speed: speed,
+        });
+        
+        // Check for violations (overspeed, signal breaks, etc.)
+        violationDetection.checkForViolations(
+          {
+            lat: ambulance.status.position.lat,
+            lng: ambulance.status.position.lon,
+          },
+          speed,
+          'GREEN', // Default state (no specific signal check here)
+          null, // Will detect overspeed on general roads
+          true, // emergency mode active
+          {
+            driverId: emergencyTracking.activeSession?.driverId || 'unknown',
+            driverName: emergencyTracking.activeSession?.driverName || 'Unknown Driver',
+            vehicleNumber: emergencyTracking.activeSession?.vehicleNumber || 'UNKNOWN',
+          },
+          emergencyTracking.activeSession?.id
+        );
+      }
+    }, 2000);
+    
+    return () => clearInterval(trackInterval);
+  }, [emergencyTracking.isActive, ambulance.status.position, speed, emergencyTracking, violationDetection]);
 
   // Speed prediction for the route
   const speedPrediction = useSpeedPrediction(
@@ -336,6 +412,9 @@ const Index = () => {
           emergencyActiveSignal={emergencyActiveSignal}
           violations={violationDetection.violations}
           onUpdateViolationStatus={violationDetection.updateViolationStatus}
+          submittedProofs={submittedProofs}
+          onProofStatusUpdate={handleProofStatusUpdate}
+          dashboardStats={dashboardStats}
         />
 
         {/* Status bar */}
@@ -407,6 +486,7 @@ const Index = () => {
                   elapsedSeconds={emergencyTracking.elapsedSeconds}
                   proofDeadlineRemaining={emergencyTracking.proofDeadlineRemaining}
                   lastCompletedSession={lastCompletedSession}
+                  proofSubmitted={emergencyTracking.isProofSubmittedForLastSession()}
                   onStartEmergency={async () => {
                     if (ambulance.status.position) {
                       // Use route end location to find nearest hospital
@@ -564,6 +644,7 @@ const Index = () => {
                   elapsedSeconds={emergencyTracking.elapsedSeconds}
                   proofDeadlineRemaining={emergencyTracking.proofDeadlineRemaining}
                   lastCompletedSession={lastCompletedSession}
+                  proofSubmitted={emergencyTracking.isProofSubmittedForLastSession()}
                   onStartEmergency={async () => {
                     if (ambulance.status.position) {
                       const endPoint = ambulance.route.length > 0
@@ -601,9 +682,9 @@ const Index = () => {
           deadlineRemaining={emergencyTracking.proofDeadlineRemaining || undefined}
           onClose={() => setShowProofUpload(false)}
           onSubmit={(proof) => {
-            console.log('Proof submitted:', proof);
+            emergencyTracking.submitProof(proof);
             setShowProofUpload(false);
-            // In production, send to Supabase
+            alert('Proof submitted successfully! Admin will review it.');
           }}
         />
       )}
