@@ -234,20 +234,23 @@ export function useEmergencyTracking(): UseEmergencyTracking {
     const now = new Date().toISOString();
     const route = routePointsRef.current;
     
-    // Calculate statistics
+    // Calculate statistics with enhanced analysis
     let totalDistance = 0;
     let maxSpeed = 0;
     let totalSpeed = 0;
+    let speedSamples = 0;
     
     for (let i = 1; i < route.length; i++) {
       const prev = route[i - 1];
       const curr = route[i];
-      // Simple distance calculation (approximate)
-      const dLat = (curr.lat - prev.lat) * 111000; // ~111km per degree latitude
+      const dLat = (curr.lat - prev.lat) * 111000;
       const dLng = (curr.lng - prev.lng) * 111000 * Math.cos(prev.lat * Math.PI / 180);
       totalDistance += Math.sqrt(dLat * dLat + dLng * dLng);
-      maxSpeed = Math.max(maxSpeed, curr.speed);
-      totalSpeed += curr.speed;
+      if (curr.speed > 0) {
+        maxSpeed = Math.max(maxSpeed, curr.speed);
+        totalSpeed += curr.speed;
+        speedSamples++;
+      }
     }
 
     const endedSession: EmergencySession = {
@@ -257,8 +260,8 @@ export function useEmergencyTracking(): UseEmergencyTracking {
       endLocation: endLocation || (route.length > 0 ? { lat: route[route.length - 1].lat, lng: route[route.length - 1].lng } : activeSession.startLocation),
       route,
       distanceTraveledKm: totalDistance / 1000,
-      maxSpeedKmh: maxSpeed,
-      averageSpeedKmh: route.length > 1 ? totalSpeed / (route.length - 1) : 0,
+      maxSpeedKmh: Math.round(maxSpeed),
+      averageSpeedKmh: speedSamples > 0 ? Math.round(totalSpeed / speedSamples) : 0,
     };
 
     // Update in sessions list
