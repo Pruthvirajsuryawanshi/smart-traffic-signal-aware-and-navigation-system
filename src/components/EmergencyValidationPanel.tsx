@@ -56,50 +56,125 @@ function formatDuration(startTime: string, endTime?: string): string {
 function performSmartValidation(proof: EmergencyProof, session: EmergencySession): ValidationResult {
   const flags: string[] = [];
   const recommendations: string[] = [];
-  let confidence = 50;
+  let confidence = 30; // Start lower, earn trust
 
-  // Check if proof was submitted on time
+  // 1. Proof submission timeliness (+20 / -25)
   if (proof.submittedWithinDeadline) {
     confidence += 20;
   } else {
-    flags.push('Proof submitted after deadline');
-    confidence -= 20;
+    flags.push('⏰ Proof submitted after 8-hour deadline');
+    confidence -= 25;
+    recommendations.push('Investigate reason for late submission');
   }
 
-  // Check if hospital matches (if both exist)
+  // 2. Hospital destination match (+15 / -10)
   if (proof.hospitalName && session.hospitalName) {
-    if (proof.hospitalName.toLowerCase().includes(session.hospitalName.toLowerCase())) {
+    const proofHosp = proof.hospitalName.toLowerCase().trim();
+    const sessHosp = session.hospitalName.toLowerCase().trim();
+    if (proofHosp === sessHosp || proofHosp.includes(sessHosp) || sessHosp.includes(proofHosp)) {
       confidence += 15;
     } else {
-      flags.push('Hospital name mismatch');
-      recommendations.push('Verify hospital destination');
+      flags.push('🏥 Hospital name mismatch between proof and session');
+      confidence -= 10;
+      recommendations.push('Cross-verify hospital admission records');
     }
+  } else if (!proof.hospitalName) {
+    flags.push('🏥 No hospital name provided in proof');
+    confidence -= 5;
   }
 
-  // Check if route makes sense
-  if (session.distanceTraveledKm > 0.5 && session.distanceTraveledKm < 50) {
-    confidence += 10;
+  // 3. Route distance analysis (+15 / -15)
+  if (session.distanceTraveledKm >= 0.5 && session.distanceTraveledKm <= 50) {
+    confidence += 15;
   } else if (session.distanceTraveledKm < 0.5) {
-    flags.push('Very short emergency distance');
-    recommendations.push('Verify emergency was genuine');
+    flags.push('📍 Suspiciously short distance (<500m)');
+    confidence -= 15;
+    recommendations.push('Verify emergency was genuine — possible false activation');
+  } else if (session.distanceTraveledKm > 50) {
+    flags.push('📍 Unusually long distance (>50km)');
+    confidence -= 5;
+    recommendations.push('Check if route deviation occurred');
   }
 
-  // Check speed patterns
-  if (session.maxSpeedKmh < 120 && session.averageSpeedKmh > 20) {
+  // 4. Speed pattern analysis (+10 / -10)
+  if (session.averageSpeedKmh >= 15 && session.averageSpeedKmh <= 80) {
     confidence += 10;
-  } else if (session.maxSpeedKmh > 100) {
-    flags.push('High speed detected');
-    recommendations.push('Review speed data');
+  } else if (session.averageSpeedKmh < 15) {
+    flags.push('🐌 Very low average speed — possible non-emergency use');
+    confidence -= 10;
+    recommendations.push('Review if emergency priority was needed');
   }
-
-  // Check signals crossed
-  if (session.signalsCrossed.length > 0) {
+  
+  if (session.maxSpeedKmh > 120) {
+    flags.push('⚡ Dangerously high speed detected (>120 km/h)');
+    confidence -= 10;
+    recommendations.push('Issue speed violation warning');
+  } else if (session.maxSpeedKmh > 80 && session.maxSpeedKmh <= 120) {
+    // High but acceptable for emergency
     confidence += 5;
   }
 
+  // 5. Signal crossing analysis (+10 / -5)
+  if (session.signalsCrossed.length > 0) {
+    confidence += 10;
+    // Check for duplicate signal crossings (looping behavior)
+    const uniqueSignals = new Set(session.signalsCrossed);
+    const duplicateRatio = 1 - (uniqueSignals.size / session.signalsCrossed.length);
+    if (duplicateRatio > 0.5 && session.signalsCrossed.length > 4) {
+      flags.push('🔁 Repeated signal crossings detected — possible circling');
+      confidence -= 10;
+      recommendations.push('Investigate route for circular patterns');
+    }
+  } else if (session.distanceTraveledKm > 1) {
+    flags.push('🚦 No signals crossed despite significant distance');
+    confidence -= 5;
+  }
+
+  // 6. Emergency duration analysis (+5 / -5)
+  if (session.startTime && session.endTime) {
+    const durationMs = new Date(session.endTime).getTime() - new Date(session.startTime).getTime();
+    const durationMin = durationMs / 60000;
+    if (durationMin < 1) {
+      flags.push('⏱ Emergency lasted less than 1 minute');
+      confidence -= 15;
+      recommendations.push('Very short session — likely false activation');
+    } else if (durationMin >= 2 && durationMin <= 60) {
+      confidence += 5;
+    } else if (durationMin > 120) {
+      flags.push('⏱ Emergency lasted over 2 hours');
+      confidence -= 5;
+      recommendations.push('Verify extended emergency duration');
+    }
+  }
+
+  // 7. Document verification (+10)
+  if (proof.documentUrls && proof.documentUrls.length > 0) {
+    confidence += 10;
+    if (proof.documentUrls.length >= 2) {
+      confidence += 5; // Multiple documents = stronger proof
+    }
+  } else {
+    flags.push('📄 No supporting documents uploaded');
+    confidence -= 5;
+    recommendations.push('Request supporting documentation');
+  }
+
+  // 8. Route point density check
+  if (session.route && session.route.length > 0) {
+    const pointsPerKm = session.distanceTraveledKm > 0 
+      ? session.route.length / session.distanceTraveledKm 
+      : 0;
+    if (pointsPerKm < 2 && session.distanceTraveledKm > 1) {
+      flags.push('📡 Low GPS tracking density — possible tracking gap');
+      recommendations.push('Check for GPS signal issues during emergency');
+    }
+  }
+
+  const finalConfidence = Math.min(100, Math.max(0, confidence));
+
   return {
-    isValid: confidence >= 60,
-    confidence: Math.min(100, Math.max(0, confidence)),
+    isValid: finalConfidence >= 55,
+    confidence: finalConfidence,
     flags,
     recommendations,
   };
