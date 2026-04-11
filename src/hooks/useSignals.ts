@@ -1,10 +1,9 @@
-// Signal sync hook - Isolated per-intersection tables to prevent cross-interference
+// Signal sync hook - Uses Realtime + fast polling fallback
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { TrafficSignal, SignalState, SignalRuntime } from '@/types/signal';
 import { SIGNAL_METADATA, DEFAULT_SETTINGS } from '@/types/signal';
 
-// Known intersection tables - dynamically extended when new ones are discovered
 const KNOWN_TABLES = ['traffic_signals_int1', 'traffic_signals_int2'] as const;
 
 export function useSignals() {
@@ -12,10 +11,9 @@ export function useSignals() {
   const [loading, setLoading] = useState(true);
   const runtimesRef = useRef<Map<string, SignalRuntime>>(new Map());
   const extraTablesRef = useRef<string[]>([]);
+  const lastFetchRef = useRef<number>(0);
 
   const discoverTables = useCallback(async () => {
-    // Try to discover additional intersection tables (INT-3, INT-4, etc.)
-    // by attempting to query them. Cache discoveries.
     const maxCheck = 10;
     const newTables: string[] = [];
     for (let i = 3; i <= maxCheck; i++) {
@@ -29,7 +27,7 @@ export function useSignals() {
         if (!error && data) {
           newTables.push(tableName);
         } else {
-          break; // Stop at first missing table
+          break;
         }
       } catch {
         break;
@@ -39,11 +37,42 @@ export function useSignals() {
     return newTables;
   }, []);
 
+  const enrichSignals = useCallback((allData: any[]): TrafficSignal[] => {
+    return allData.map((signal) => ({
+      ...signal,
+      intersection: signal.intersection ?? SIGNAL_METADATA[signal.id]?.intersection,
+      roadName: (signal.road_name ?? signal.roadName ?? SIGNAL_METADATA[signal.id]?.roadName) || 'default',
+      type: (signal.type ?? SIGNAL_METADATA[signal.id]?.type) || 'highway',
+    }));
+  }, []);
+
+  const updateRuntimes = useCallback((enriched: TrafficSignal[]) => {
+    enriched.forEach((signal) => {
+      runtimesRef.current.set(signal.id, {
+        elapsed: 0,
+        cycle: {
+          GREEN: DEFAULT_SETTINGS.cycle.GREEN,
+          YELLOW: DEFAULT_SETTINGS.cycle.YELLOW,
+          RED: DEFAULT_SETTINGS.cycle.RED,
+        },
+        state: signal.state as SignalState,
+      });
+    });
+    const currentIds = new Set(enriched.map(s => s.id));
+    for (const id of runtimesRef.current.keys()) {
+      if (!currentIds.has(id)) runtimesRef.current.delete(id);
+    }
+  }, []);
+
   const fetchSignals = useCallback(async () => {
+    // Throttle: skip if last fetch was < 200ms ago
+    const now = Date.now();
+    if (now - lastFetchRef.current < 200) return;
+    lastFetchRef.current = now;
+
     const extraTables = await discoverTables();
     const allTableNames = [...KNOWN_TABLES, ...extraTables];
 
-    // Fetch from each intersection table independently
     const results = await Promise.all(
       allTableNames.map(table =>
         supabase.from(table as any).select('*').order('id', { ascending: true })
@@ -58,52 +87,92 @@ export function useSignals() {
     }
 
     if (allData.length > 0) {
-      const enriched: TrafficSignal[] = allData.map((signal) => ({
-        ...signal,
-        intersection: signal.intersection ?? SIGNAL_METADATA[signal.id]?.intersection,
-        roadName: (signal.road_name ?? signal.roadName ?? SIGNAL_METADATA[signal.id]?.roadName) || 'default',
-        type: (signal.type ?? SIGNAL_METADATA[signal.id]?.type) || 'highway',
-      }));
-
+      const enriched = enrichSignals(allData);
       setSignals(enriched);
-
-      enriched.forEach((signal) => {
-        runtimesRef.current.set(signal.id, {
-          elapsed: 0,
-          cycle: {
-            GREEN: DEFAULT_SETTINGS.cycle.GREEN,
-            YELLOW: DEFAULT_SETTINGS.cycle.YELLOW,
-            RED: DEFAULT_SETTINGS.cycle.RED,
-          },
-          state: signal.state as SignalState,
-        });
-      });
-
-      // Clean up removed signals
-      const currentIds = new Set(enriched.map(s => s.id));
-      for (const id of runtimesRef.current.keys()) {
-        if (!currentIds.has(id)) runtimesRef.current.delete(id);
-      }
+      updateRuntimes(enriched);
     }
 
     setLoading(false);
-  }, [discoverTables]);
+  }, [discoverTables, enrichSignals, updateRuntimes]);
+
+  // Apply a single realtime change instantly without full refetch
+  const applyRealtimeChange = useCallback((payload: any) => {
+    const newRecord = payload.new;
+    if (!newRecord || !newRecord.id) return;
+
+    setSignals(prev => {
+      const idx = prev.findIndex(s => s.id === newRecord.id);
+      const enrichedRecord: TrafficSignal = {
+        ...newRecord,
+        intersection: newRecord.intersection ?? SIGNAL_METADATA[newRecord.id]?.intersection,
+        roadName: (newRecord.road_name ?? newRecord.roadName ?? SIGNAL_METADATA[newRecord.id]?.roadName) || 'default',
+        type: (newRecord.type ?? SIGNAL_METADATA[newRecord.id]?.type) || 'highway',
+      };
+
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = enrichedRecord;
+        return updated;
+      } else if (payload.eventType === 'INSERT') {
+        return [...prev, enrichedRecord];
+      }
+      return prev;
+    });
+
+    // Update runtime for this signal
+    if (newRecord.id) {
+      runtimesRef.current.set(newRecord.id, {
+        elapsed: 0,
+        cycle: {
+          GREEN: DEFAULT_SETTINGS.cycle.GREEN,
+          YELLOW: DEFAULT_SETTINGS.cycle.YELLOW,
+          RED: DEFAULT_SETTINGS.cycle.RED,
+        },
+        state: newRecord.state as SignalState,
+      });
+    }
+  }, []);
 
   useEffect(() => {
     fetchSignals();
-    const interval = setInterval(fetchSignals, 500);
-    return () => clearInterval(interval);
-  }, [fetchSignals]);
+
+    // Subscribe to realtime changes on all known tables for instant updates
+    const channels: ReturnType<typeof supabase.channel>[] = [];
+
+    const allTables = [...KNOWN_TABLES, ...extraTablesRef.current];
+    allTables.forEach(table => {
+      const channel = supabase
+        .channel(`realtime-${table}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => {
+          console.log(`[Realtime] ${table} change:`, payload.eventType, (payload.new as any)?.id);
+          if (payload.eventType === 'DELETE') {
+            setSignals(prev => prev.filter(s => s.id !== (payload.old as any)?.id));
+          } else {
+            applyRealtimeChange(payload);
+          }
+        })
+        .subscribe();
+      channels.push(channel);
+    });
+
+    // Slower fallback poll (every 2s) for table discovery & missed events
+    const interval = setInterval(fetchSignals, 2000);
+
+    return () => {
+      clearInterval(interval);
+      channels.forEach(ch => supabase.removeChannel(ch));
+    };
+  }, [fetchSignals, applyRealtimeChange]);
 
   const updateSignal = useCallback(async (id: string, state: SignalState) => {
     await supabase.functions.invoke('update-signals', {
       body: { [id]: state },
     });
-    await fetchSignals();
+    // Realtime will handle the update, but force fetch as backup
+    setTimeout(fetchSignals, 100);
   }, [fetchSignals]);
 
   const refreshSignals = useCallback(async () => {
-    // Force re-discovery of tables on next fetch
     extraTablesRef.current = [];
     await fetchSignals();
   }, [fetchSignals]);
