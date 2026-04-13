@@ -562,5 +562,7 @@ export function useAmbulanceSimulation(
     reset,
     clearRoute,
     esp32IPs,
+    overrideSignalGreen,
+    restoreSignal,
   };
 }

@@ -4,8 +4,8 @@
 #include <ArduinoJson.h>
 
 // ===================== WIFI =====================
-const char* WIFI_SSID = "Hackathon-2025";
-const char* WIFI_PASS = "20252025";
+const char* WIFI_SSID = "internet";
+const char* WIFI_PASS = "internet";
 
 // ===================== CLOUD ====================
 const char* CLOUD_URL = "https://ssvddgrfxqomtonfukew.supabase.co/functions/v1/update-signals";

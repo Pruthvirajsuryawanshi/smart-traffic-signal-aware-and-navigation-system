@@ -132,6 +132,68 @@ const Index = () => {
     return () => clearInterval(trackInterval);
   }, [emergencyTracking.isActive, ambulance.status.position, speed, emergencyTracking, violationDetection]);
 
+  // Auto-trigger signals when emergency is active and ambulance is moving
+  useEffect(() => {
+    if (!emergencyTracking.isActive || !ambulance.status.position || !ambulance.status.running) return;
+    
+    let lastTriggeredSignal: string | null = null;
+    
+    // Check for nearby signals every 1 second when emergency is active
+    const emergencySignalInterval = setInterval(() => {
+      if (!ambulance.status.position || !ambulance.status.nearbySignalId) return;
+      
+      const nearbySignalId = ambulance.status.nearbySignalId;
+      const nearbySignal = signals.find(s => s.id === nearbySignalId);
+      
+      // Only trigger if this is a different signal than the last one
+      if (nearbySignal && nearbySignalId !== lastTriggeredSignal) {
+        console.log('[Emergency] Auto-triggering signal:', nearbySignalId);
+        ambulance.overrideSignalGreen(nearbySignalId);
+        
+        // Record signal crossing
+        emergencyTracking.recordSignalCrossing(nearbySignalId, 'GREEN');
+        
+        lastTriggeredSignal = nearbySignalId;
+      }
+    }, 1000);
+    
+    return () => {
+      clearInterval(emergencySignalInterval);
+      // Restore the last triggered signal when emergency stops or component unmounts
+      if (lastTriggeredSignal) {
+        console.log('[Emergency] Restoring last signal:', lastTriggeredSignal);
+        ambulance.restoreSignal(lastTriggeredSignal);
+      }
+    };
+  }, [emergencyTracking.isActive, ambulance.status.position, ambulance.status.running, ambulance.status.nearbySignalId, signals, ambulance]);
+
+  // Trigger nearest signal when emergency starts (even if ambulance is not moving)
+  useEffect(() => {
+    if (!emergencyTracking.isActive || !ambulance.status.position) return;
+    
+    // Find the nearest signal to current position
+    const currentPos = ambulance.status.position;
+    let nearestSignal: typeof signals[0] | null = null;
+    let nearestDistance = Infinity;
+    
+    signals.forEach(signal => {
+      const dLat = (signal.latitude - currentPos.lat) * 111000;
+      const dLng = (signal.longitude - currentPos.lon) * 111000 * Math.cos(currentPos.lat * Math.PI / 180);
+      const distance = Math.sqrt(dLat * dLat + dLng * dLng);
+      
+      if (distance < nearestDistance && distance < 500) { // Within 500m
+        nearestDistance = distance;
+        nearestSignal = signal;
+      }
+    });
+    
+    if (nearestSignal) {
+      console.log('[Emergency] Triggering nearest signal on activation:', nearestSignal.id, `(${Math.round(nearestDistance)}m)`);
+      ambulance.overrideSignalGreen(nearestSignal.id);
+      emergencyTracking.recordSignalCrossing(nearestSignal.id, 'GREEN');
+    }
+  }, [emergencyTracking.isActive]); // Only trigger once when emergency becomes active
+
   // Speed prediction for the route
   const speedPrediction = useSpeedPrediction(
     signals,
