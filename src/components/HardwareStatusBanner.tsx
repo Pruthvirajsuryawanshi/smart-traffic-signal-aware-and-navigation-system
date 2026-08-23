@@ -1,4 +1,5 @@
-import { AlertTriangle, Cpu, RefreshCw, Wifi } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Cpu, RefreshCw, Wifi } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { HardwareState } from '@/hooks/useHardwareStatus';
 
@@ -11,6 +12,7 @@ interface Props {
  * tells the user the app is running on simulated (demo) signal states.
  */
 const HardwareStatusBanner = ({ hardware }: Props) => {
+  const [collapsed, setCollapsed] = useState(false);
   if (hardware.status === 'online') {
     return (
       <div className="flex items-center gap-2 rounded-md border border-signal-green/40 bg-signal-green/10 px-3 py-2">
