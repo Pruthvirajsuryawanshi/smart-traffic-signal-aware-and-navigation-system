@@ -12,6 +12,8 @@ import SettingsPanel from '@/components/SettingsPanel';
 import SpeedPredictionPanel from '@/components/SpeedPredictionPanel';
 import EmergencyModeControl from '@/components/EmergencyModeControl';
 import ProofUploadForm from '@/components/ProofUploadForm';
+import HardwareStatusBanner from '@/components/HardwareStatusBanner';
+import { useHardwareStatus } from '@/hooks/useHardwareStatus';
 import { useSpeedPrediction } from '@/hooks/useSpeedPrediction';
 import { supabase } from '@/integrations/supabase/client';
 import type { SignalConfig } from '@/components/SettingsPanel';
