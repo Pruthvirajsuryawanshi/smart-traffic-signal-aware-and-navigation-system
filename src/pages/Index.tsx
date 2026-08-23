@@ -12,6 +12,8 @@ import SettingsPanel from '@/components/SettingsPanel';
 import SpeedPredictionPanel from '@/components/SpeedPredictionPanel';
 import EmergencyModeControl from '@/components/EmergencyModeControl';
 import ProofUploadForm from '@/components/ProofUploadForm';
+import HardwareStatusBanner from '@/components/HardwareStatusBanner';
+import { useHardwareStatus } from '@/hooks/useHardwareStatus';
 import { useSpeedPrediction } from '@/hooks/useSpeedPrediction';
 import { supabase } from '@/integrations/supabase/client';
 import type { SignalConfig } from '@/components/SettingsPanel';
@@ -47,6 +49,9 @@ const Index = () => {
   });
 
   const ambulance = useAmbulanceSimulation(signals, routeSignals, intersectionIPs);
+
+  // Physical ESP32 controller reachability — drives demo-mode messaging
+  const hardware = useHardwareStatus(intersectionIPs);
 
   // Emergency validation system
   const emergencyTracking = useEmergencyTracking();
@@ -480,7 +485,7 @@ const Index = () => {
         />
 
         {/* Status bar */}
-        <div className="px-3 pt-3">
+        <div className="px-3 pt-3 space-y-2">
           <div className="flex items-center gap-2 bg-secondary/50 rounded-md px-3 py-2">
             <div
               className={`w-2 h-2 rounded-full ${
@@ -492,7 +497,13 @@ const Index = () => {
             <span className="text-[10px] font-mono text-muted-foreground">
               {loading ? 'Connecting...' : `${signals.length} signals online`}
             </span>
+            {hardware.status === 'offline' && (
+              <span className="ml-auto rounded bg-signal-yellow/20 px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wide text-signal-yellow">
+                Demo
+              </span>
+            )}
           </div>
+          <HardwareStatusBanner hardware={hardware} />
         </div>
 
         {/* Tabs */}
