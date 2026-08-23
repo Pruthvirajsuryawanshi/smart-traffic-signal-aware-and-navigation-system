@@ -480,7 +480,7 @@ const Index = () => {
         />
 
         {/* Status bar */}
-        <div className="px-3 pt-3">
+        <div className="px-3 pt-3 space-y-2">
           <div className="flex items-center gap-2 bg-secondary/50 rounded-md px-3 py-2">
             <div
               className={`w-2 h-2 rounded-full ${
@@ -492,7 +492,13 @@ const Index = () => {
             <span className="text-[10px] font-mono text-muted-foreground">
               {loading ? 'Connecting...' : `${signals.length} signals online`}
             </span>
+            {hardware.status === 'offline' && (
+              <span className="ml-auto rounded bg-signal-yellow/20 px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wide text-signal-yellow">
+                Demo
+              </span>
+            )}
           </div>
+          <HardwareStatusBanner hardware={hardware} />
         </div>
 
         {/* Tabs */}
