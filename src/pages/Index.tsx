@@ -14,6 +14,7 @@ import EmergencyModeControl from '@/components/EmergencyModeControl';
 import ProofUploadForm from '@/components/ProofUploadForm';
 import HardwareStatusBanner from '@/components/HardwareStatusBanner';
 import { useHardwareStatus } from '@/hooks/useHardwareStatus';
+import { useDemoSignals } from '@/hooks/useDemoSignals';
 import { useSpeedPrediction } from '@/hooks/useSpeedPrediction';
 import { supabase } from '@/integrations/supabase/client';
 import type { SignalConfig } from '@/components/SettingsPanel';
@@ -23,7 +24,7 @@ import type { RouteSignalInfo, TrafficSignal } from '@/types/signal';
 import type { EmergencyProof } from '@/types/emergency-validation';
 
 const Index = () => {
-  const { signals, loading, updateSignal, refreshSignals, getRuntime, runtimes } = useSignals();
+  const { signals: rawSignals, loading, updateSignal, refreshSignals, getRuntime, runtimes } = useSignals();
   const [routeSignals, setRouteSignals] = useState<RouteSignalInfo[]>([]);
   const [routeDistance, setRouteDistance] = useState(0);
   const [speed, setSpeed] = useState(35);
@@ -48,10 +49,13 @@ const Index = () => {
     return true;
   });
 
-  const ambulance = useAmbulanceSimulation(signals, routeSignals, intersectionIPs);
-
   // Physical ESP32 controller reachability — drives demo-mode messaging
   const hardware = useHardwareStatus(intersectionIPs);
+
+  // When hardware is offline, cycle dummy signal states exactly like the firmware does
+  const signals = useDemoSignals(rawSignals, hardware.status === 'offline', emergencyActiveSignal);
+
+  const ambulance = useAmbulanceSimulation(signals, routeSignals, intersectionIPs);
 
   // Emergency validation system
   const emergencyTracking = useEmergencyTracking();
