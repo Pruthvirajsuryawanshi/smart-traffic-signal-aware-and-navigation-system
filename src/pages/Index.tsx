@@ -50,6 +50,9 @@ const Index = () => {
 
   const ambulance = useAmbulanceSimulation(signals, routeSignals, intersectionIPs);
 
+  // Physical ESP32 controller reachability — drives demo-mode messaging
+  const hardware = useHardwareStatus(intersectionIPs);
+
   // Emergency validation system
   const emergencyTracking = useEmergencyTracking();
   const violationDetection = useViolationDetection();
