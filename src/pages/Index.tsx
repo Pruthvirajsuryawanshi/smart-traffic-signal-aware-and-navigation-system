@@ -48,10 +48,13 @@ const Index = () => {
     return true;
   });
 
-  const ambulance = useAmbulanceSimulation(signals, routeSignals, intersectionIPs);
-
   // Physical ESP32 controller reachability — drives demo-mode messaging
   const hardware = useHardwareStatus(intersectionIPs);
+
+  // When hardware is offline, cycle dummy signal states exactly like the firmware does
+  const signals = useDemoSignals(rawSignals, hardware.status === 'offline', emergencyActiveSignal);
+
+  const ambulance = useAmbulanceSimulation(signals, routeSignals, intersectionIPs);
 
   // Emergency validation system
   const emergencyTracking = useEmergencyTracking();
