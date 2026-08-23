@@ -370,20 +370,13 @@ const Index = () => {
           continue; // Signals were inserted by the edge function
         }
 
-        // Existing intersection - do upsert/delete
+        // Existing intersection - do upsert/delete through the service-role edge function
         const { data: existing } = await supabase.from(tableName).select('id');
         const existingIds = new Set((existing || []).map((r: any) => r.id));
         const newConfigIds = new Set(intConfigs.map(c => c.id));
 
-        // Delete removed signals
         const toDelete = Array.from(existingIds).filter(id => !newConfigIds.has(id));
-        if (toDelete.length > 0) {
-          for (const id of toDelete) {
-            await supabase.from(tableName).delete().eq('id', id);
-          }
-        }
 
-        // Upsert signals
         const payload = intConfigs.map((config) => ({
           id: config.id,
           latitude: config.latitude,
@@ -391,11 +384,11 @@ const Index = () => {
           intersection: config.intersection,
           type: config.type,
           road_name: config.roadName,
-          state: 'RED',
-          updated_at: new Date().toISOString(),
         }));
 
-        const { error } = await supabase.from(tableName).upsert(payload, { onConflict: 'id' });
+        const { error } = await supabase.functions.invoke('save-signal-configs', {
+          body: { table: tableName, upsert: payload, deleteIds: toDelete },
+        });
         if (error) {
           console.error(`Error saving to ${tableName}:`, error);
           setSavingSignalConfigs(false);
@@ -411,10 +404,13 @@ const Index = () => {
         if (!num) continue;
         const tableName = `traffic_signals_int${num}` as 'traffic_signals_int1' | 'traffic_signals_int2';
         const sigIds = signals.filter(s => s.intersection === intId).map(s => s.id);
-        for (const id of sigIds) {
-          await supabase.from(tableName).delete().eq('id', id);
+        if (sigIds.length > 0) {
+          await supabase.functions.invoke('save-signal-configs', {
+            body: { table: tableName, upsert: [], deleteIds: sigIds },
+          });
         }
       }
+
 
       setSignalConfigs(configs);
       await refreshSignals();
