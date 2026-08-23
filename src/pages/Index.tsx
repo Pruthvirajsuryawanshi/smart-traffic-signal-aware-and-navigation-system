@@ -23,7 +23,7 @@ import type { RouteSignalInfo, TrafficSignal } from '@/types/signal';
 import type { EmergencyProof } from '@/types/emergency-validation';
 
 const Index = () => {
-  const { signals, loading, updateSignal, refreshSignals, getRuntime, runtimes } = useSignals();
+  const { signals: rawSignals, loading, updateSignal, refreshSignals, getRuntime, runtimes } = useSignals();
   const [routeSignals, setRouteSignals] = useState<RouteSignalInfo[]>([]);
   const [routeDistance, setRouteDistance] = useState(0);
   const [speed, setSpeed] = useState(35);
